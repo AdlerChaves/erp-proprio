@@ -5,29 +5,27 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { decimalTransformer } from '../../common/decimal.transformer';
 import { CentroCusto } from '../centros-custo/centro-custo.entity';
 import { Cliente } from '../clientes/cliente.entity';
-import { ContaBancaria } from '../contas-bancarias/conta-bancaria.entity';
 import { Empresa } from '../empresas/empresa.entity';
+import { Baixa } from '../financeiro/baixa.entity';
+import { ContaFinanceira } from '../financeiro/contas-financeiras.service';
+import { StatusConta } from '../financeiro/status-conta.enum';
 import { PlanoConta } from '../plano-contas/plano-conta.entity';
 
-export enum StatusContaReceber {
-  ABERTA = 'ABERTA',
-  PAGA = 'PAGA',
-  CANCELADA = 'CANCELADA',
-}
-
+/** Valor a receber de um cliente. */
 @Entity('contas_receber')
 @Index('IDX_contas_receber_empresa_status_vencimento', ['empresaId', 'status', 'dataVencimento'])
 @Index('IDX_contas_receber_cliente', ['clienteId'])
 @Index('IDX_contas_receber_plano_conta', ['planoContaId'])
 @Index('IDX_contas_receber_centro_custo', ['centroCustoId'])
-@Index('IDX_contas_receber_conta_bancaria', ['contaBancariaId'])
-export class ContaReceber {
+@Index('IDX_contas_receber_parcelamento', ['parcelamentoId'])
+export class ContaReceber implements ContaFinanceira {
   @PrimaryGeneratedColumn('uuid', { primaryKeyConstraintName: 'PK_contas_receber' })
   id: string;
 
@@ -45,7 +43,7 @@ export class ContaReceber {
   @JoinColumn({ name: 'cliente_id', foreignKeyConstraintName: 'FK_contas_receber_cliente' })
   cliente: Cliente;
 
-  /** Categoria de receita (conta analítica do plano de contas). Opcional; pode ser definida depois. */
+  /** Categoria (conta analítica do plano de contas). Opcional; pode ser definida depois. */
   @Column({ name: 'plano_conta_id', type: 'uuid', nullable: true })
   planoContaId: string | null;
 
@@ -60,14 +58,6 @@ export class ContaReceber {
   @JoinColumn({ name: 'centro_custo_id', foreignKeyConstraintName: 'FK_contas_receber_centro_custo' })
   centroCusto: CentroCusto | null;
 
-  /** Conta bancária ou caixa onde o pagamento entrou; preenchida na baixa. */
-  @Column({ name: 'conta_bancaria_id', type: 'uuid', nullable: true })
-  contaBancariaId: string | null;
-
-  @ManyToOne(() => ContaBancaria, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'conta_bancaria_id', foreignKeyConstraintName: 'FK_contas_receber_conta_bancaria' })
-  contaBancaria: ContaBancaria | null;
-
   @Column({ length: 255 })
   descricao: string;
 
@@ -80,21 +70,21 @@ export class ContaReceber {
   @Column({ name: 'data_vencimento', type: 'date' })
   dataVencimento: string;
 
-  @Column({ name: 'data_pagamento', type: 'date', nullable: true })
-  dataPagamento: string | null;
+  @Column({ type: 'enum', enum: StatusConta, default: StatusConta.ABERTA })
+  status: StatusConta;
 
-  @Column({
-    name: 'valor_pago',
-    type: 'numeric',
-    precision: 14,
-    scale: 2,
-    nullable: true,
-    transformer: decimalTransformer,
-  })
-  valorPago: number | null;
+  /** Igual em todas as parcelas de um mesmo parcelamento. */
+  @Column({ name: 'parcelamento_id', type: 'uuid', nullable: true })
+  parcelamentoId: string | null;
 
-  @Column({ type: 'enum', enum: StatusContaReceber, default: StatusContaReceber.ABERTA })
-  status: StatusContaReceber;
+  @Column({ type: 'smallint', nullable: true })
+  parcela: number | null;
+
+  @Column({ name: 'total_parcelas', type: 'smallint', nullable: true })
+  totalParcelas: number | null;
+
+  @OneToMany(() => Baixa, (baixa) => baixa.contaReceber)
+  baixas: Baixa[];
 
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;

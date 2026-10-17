@@ -1,13 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
+import { BaixaDto } from '../financeiro/dto/baixa.dto';
+import { UpdateContaDto } from '../financeiro/dto/dados-conta.dto';
 import { Perfil } from '../usuarios/perfil.enum';
 import { ContasReceberService } from './contas-receber.service';
-import { BaixaContaReceberDto } from './dto/baixa-conta-receber.dto';
-import { CreateContaReceberDto } from './dto/create-conta-receber.dto';
+import { CreateContaReceberDto, CreateParcelamentoContaReceberDto } from './dto/create-conta-receber.dto';
 import { FiltroContaReceberDto } from './dto/filtro-conta-receber.dto';
-import { UpdateContaReceberDto } from './dto/update-conta-receber.dto';
 
 @ApiTags('contas-receber')
 @ApiBearerAuth()
@@ -31,30 +31,43 @@ export class ContasReceberController {
     return this.service.create(sessao.empresaId, dto);
   }
 
+  /** Divide o valor em parcelas mensais. */
+  @Post('parcelamentos')
+  @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
+  criarParcelamento(@SessaoAtual() sessao: Sessao, @Body() dto: CreateParcelamentoContaReceberDto) {
+    return this.service.criarParcelamento(sessao.empresaId, dto);
+  }
+
   @Patch(':id')
   @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
   update(
     @SessaoAtual() sessao: Sessao,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateContaReceberDto,
+    @Body() dto: UpdateContaDto,
   ) {
     return this.service.update(sessao.empresaId, id, dto);
   }
 
-  @Post(':id/baixa')
+  /** Registra um pagamento total ou parcial. */
+  @Post(':id/baixas')
   @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
-  baixar(
+  registrarBaixa(
     @SessaoAtual() sessao: Sessao,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: BaixaContaReceberDto,
+    @Body() dto: BaixaDto,
   ) {
-    return this.service.baixar(sessao.empresaId, id, dto);
+    return this.service.registrarBaixa(sessao.empresaId, id, dto);
   }
 
-  @Post(':id/estorno')
+  /** Estorna uma baixa e a movimentação bancária dela. */
+  @Delete(':id/baixas/:baixaId')
   @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
-  estornar(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
-    return this.service.estornar(sessao.empresaId, id);
+  estornarBaixa(
+    @SessaoAtual() sessao: Sessao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('baixaId', ParseUUIDPipe) baixaId: string,
+  ) {
+    return this.service.estornarBaixa(sessao.empresaId, id, baixaId);
   }
 
   @Post(':id/cancelamento')

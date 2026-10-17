@@ -1,12 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
+import { hoje } from '../../common/datas';
 import { MovimentacaoBancaria } from '../movimentacoes/movimentacao-bancaria.entity';
 import { ContaBancaria, TipoContaBancaria } from './conta-bancaria.entity';
 import { CreateContaBancariaDto } from './dto/create-conta-bancaria.dto';
 import { UpdateContaBancariaDto } from './dto/update-conta-bancaria.dto';
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 @Injectable()
 export class ContasBancariasService {

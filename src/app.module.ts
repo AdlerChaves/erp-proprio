@@ -10,6 +10,7 @@ import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancari
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
 import { ContasReceberModule } from './modules/contas-receber/contas-receber.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
+import { FinanceiroModule } from './modules/financeiro/financeiro.module';
 import { FornecedoresModule } from './modules/fornecedores/fornecedores.module';
 import { MovimentacoesModule } from './modules/movimentacoes/movimentacoes.module';
 import { PlanoContasModule } from './modules/plano-contas/plano-contas.module';
@@ -34,6 +35,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     ContasReceberModule,
     ContasPagarModule,
     MovimentacoesModule,
+    FinanceiroModule,
   ],
   controllers: [HealthController],
 })

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml)
 
-API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias), **Contas a Receber**, **Contas a Pagar** e **movimentação bancária** com saldo e extrato.
+API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias), **Contas a Receber** e **Contas a Pagar** com baixas parciais e parcelamento, **movimentação bancária** com saldo e extrato, **fluxo de caixa** e **DRE**.
 
 ## Rodando com Docker
 
@@ -35,8 +35,8 @@ npm run start:dev
 |---|---|
 | `ADMIN` | Tudo, incluindo usuários, dados da empresa e remoção de qualquer cadastro |
 | `FINANCEIRO` | Criar e alterar todos os cadastros, contas a receber e a pagar, e movimentações bancárias |
-| `VENDAS` | Criar e alterar clientes e produtos; não vê saldos nem extratos |
-| `CONSULTA` | Só leitura, incluindo saldos e extratos |
+| `VENDAS` | Criar e alterar clientes e produtos; não vê saldos, extratos nem relatórios financeiros |
+| `CONSULTA` | Só leitura, incluindo saldos, extratos, fluxo de caixa e DRE |
 
 A empresa sempre mantém pelo menos um `ADMIN` ativo.
 
@@ -66,24 +66,28 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | GET/PATCH/DELETE | `/api/centros-custo/:id` | Consulta / altera / remove centro de custo |
 | GET/POST | `/api/contas-bancarias` | Lista / cria contas bancárias e caixas |
 | GET/PATCH/DELETE | `/api/contas-bancarias/:id` | Consulta / altera / remove conta bancária |
-| GET | `/api/contas-receber?clienteId=&planoContaId=&centroCustoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
+| GET | `/api/contas-receber?clienteId=&planoContaId=&centroCustoId=&parcelamentoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros, baixas, total baixado e saldo |
 | POST | `/api/contas-receber` | Cria conta (status `ABERTA`), com categoria e centro de custo opcionais |
-| GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (paga ou cancelada: só categoria e centro de custo) |
-| POST | `/api/contas-receber/:id/baixa` | Registra pagamento (`PAGA`) na conta bancária informada em `contaBancariaId` |
-| POST | `/api/contas-receber/:id/estorno` | Desfaz a baixa: volta a `ABERTA` e remove a movimentação bancária |
-| POST | `/api/contas-receber/:id/cancelamento` | Cancela (`CANCELADA`) |
-| GET | `/api/contas-pagar?fornecedorId=&planoContaId=&centroCustoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
+| POST | `/api/contas-receber/parcelamentos` | Divide `valor` em `parcelas` mensais a partir de `dataVencimento` |
+| GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (com baixas ou cancelada: só categoria e centro de custo) |
+| POST | `/api/contas-receber/:id/baixas` | Registra pagamento total ou parcial, com juros, multa e desconto |
+| DELETE | `/api/contas-receber/:id/baixas/:baixaId` | Estorna uma baixa e sua movimentação bancária |
+| POST | `/api/contas-receber/:id/cancelamento` | Cancela (`CANCELADA`); só sem baixas |
+| GET | `/api/contas-pagar?fornecedorId=&planoContaId=&centroCustoId=&parcelamentoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros, baixas, total baixado e saldo |
 | POST | `/api/contas-pagar` | Cria conta (status `ABERTA`), com categoria e centro de custo opcionais |
-| GET/PATCH | `/api/contas-pagar/:id` | Consulta / altera (paga ou cancelada: só categoria e centro de custo) |
-| POST | `/api/contas-pagar/:id/baixa` | Registra pagamento (`PAGA`) saindo da conta bancária informada em `contaBancariaId` |
-| POST | `/api/contas-pagar/:id/estorno` | Desfaz a baixa: volta a `ABERTA` e remove a movimentação bancária |
-| POST | `/api/contas-pagar/:id/cancelamento` | Cancela (`CANCELADA`) |
+| POST | `/api/contas-pagar/parcelamentos` | Divide `valor` em `parcelas` mensais a partir de `dataVencimento` |
+| GET/PATCH | `/api/contas-pagar/:id` | Consulta / altera (com baixas ou cancelada: só categoria e centro de custo) |
+| POST | `/api/contas-pagar/:id/baixas` | Registra pagamento total ou parcial, com juros, multa e desconto |
+| DELETE | `/api/contas-pagar/:id/baixas/:baixaId` | Estorna uma baixa e sua movimentação bancária |
+| POST | `/api/contas-pagar/:id/cancelamento` | Cancela (`CANCELADA`); só sem baixas |
 | GET | `/api/movimentacoes?contaBancariaId=&tipo=&origem=&de=&ate=` | Lista movimentações bancárias |
 | POST | `/api/movimentacoes` | Lança movimentação avulsa (tarifa, rendimento, ajuste) |
 | POST | `/api/movimentacoes/transferencias` | Transfere entre duas contas da empresa |
 | DELETE | `/api/movimentacoes/:id` | Remove avulsa ou as duas pernas de uma transferência |
 | GET | `/api/movimentacoes/saldos?data=` | Saldo de cada conta ao fim do dia (padrão: hoje) |
 | GET | `/api/movimentacoes/extrato?contaBancariaId=&de=&ate=` | Extrato com saldo anterior, saldo após cada linha e saldo final |
+| GET | `/api/financeiro/fluxo-caixa?de=&ate=&agrupamento=mes\|dia` | Realizado e previsto por período, saldo acumulado e contas em atraso |
+| GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa` | Resultado por categoria, somado até as contas sintéticas |
 
 Regras dos cadastros:
 
@@ -96,7 +100,10 @@ Regras dos cadastros:
 Contas a receber e contas a pagar (mesmas regras; a pagar usa fornecedor e categoria de despesa):
 
 - A categoria (`planoContaId`) é opcional e precisa ser uma conta analítica e ativa do tipo certo (receita ou despesa). O centro de custo também é opcional e precisa estar ativo. Os dois podem ser definidos ou trocados depois, inclusive em contas pagas ou canceladas; envie `null` para remover.
-- A baixa exige `contaBancariaId` (conta ativa da empresa). `valorPago` e `dataPagamento` são opcionais e assumem o valor da conta e a data de hoje.
+- Uma conta aceita várias baixas. Cada baixa exige `contaBancariaId` (conta ativa da empresa) e informa o principal abatido (`valor`, padrão: todo o saldo), `juros`, `multa`, `desconto` e `data` (padrão: hoje). O valor movimentado no banco é `valor + juros + multa - desconto`.
+- Status: `ABERTA` sem baixas, `PARCIAL` com saldo restante, `PAGA` quando o saldo zera. O principal nunca passa do saldo, mesmo com baixas simultâneas (a conta é travada durante a baixa).
+- Estornar uma baixa remove ela e sua movimentação, e o status é recalculado. Só contas sem baixas podem ser canceladas.
+- Parcelamento: os centavos que sobram da divisão vão para as primeiras parcelas, e o vencimento cai no mesmo dia de cada mês (ou no último dia, se o mês for mais curto). As parcelas compartilham o `parcelamentoId`.
 
 Movimentação bancária:
 
@@ -105,6 +112,12 @@ Movimentação bancária:
 - Transferências geram uma saída e uma entrada ligadas por `transferenciaId`; remover uma remove as duas.
 - Movimentações avulsas aceitam categoria (receita na entrada, despesa na saída) e centro de custo.
 - Nenhuma movimentação pode ter data anterior à data do saldo inicial da conta, e essa data não pode ser movida para depois de uma movimentação existente.
+- "Hoje" é calculado no fuso de `APP_TIMEZONE` (padrão `America/Sao_Paulo`), não em UTC.
+
+Relatórios:
+
+- **Fluxo de caixa**: realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
+- **DRE**: por competência, contas não canceladas pela data de emissão e pelo valor original; por caixa, baixas pela data e pelo valor pago. Nos dois regimes entram as movimentações avulsas com categoria. Valores sem categoria aparecem em `semCategoria`.
 - Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
 ## Testes
@@ -126,6 +139,7 @@ npm run test:e2e
 | `test/contas-receber.e2e-spec.ts` | Plano de contas padrão, categoria e centro de custo, baixa com conta bancária, datas e estados da conta |
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
+| `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 

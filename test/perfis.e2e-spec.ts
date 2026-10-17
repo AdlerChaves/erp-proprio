@@ -41,7 +41,7 @@ describe('Perfis e gestão de usuários', () => {
       ],
       baixarConta: [
         'baixar conta',
-        (t, c) => api(app, t).post(`/contas-receber/${c.contaId}/baixa`, { contaBancariaId: c.contaBancariaId }),
+        (t, c) => api(app, t).post(`/contas-receber/${c.contaId}/baixas`, { contaBancariaId: c.contaBancariaId }),
       ],
       listarUsuarios: ['listar usuários', (t) => api(app, t).get('/usuarios')],
       alterarEmpresa: ['alterar empresa', (t) => api(app, t).patch('/empresas/atual', { nomeFantasia: 'Novo nome' })],

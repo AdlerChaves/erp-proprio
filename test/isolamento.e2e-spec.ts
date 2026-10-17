@@ -75,7 +75,7 @@ describe('Isolamento entre empresas', () => {
       await api(app, b.token).get(`/contas-receber/${contaA.id}`).expect(404);
       await api(app, b.token).patch(`/contas-receber/${contaA.id}`, { descricao: 'Invadida' }).expect(404);
       const caixaB = await criarContaBancaria(app, b.token);
-      await api(app, b.token).post(`/contas-receber/${contaA.id}/baixa`, { contaBancariaId: caixaB.id }).expect(404);
+      await api(app, b.token).post(`/contas-receber/${contaA.id}/baixas`, { contaBancariaId: caixaB.id }).expect(404);
       await api(app, b.token).post(`/contas-receber/${contaA.id}/cancelamento`).expect(404);
 
       const res = await api(app, a.token).get(`/contas-receber/${contaA.id}`).expect(200);

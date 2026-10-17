@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Between, DataSource, EntityManager, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
-import { centavos, hoje, reais } from '../../common/dinheiro';
+import { hoje } from '../../common/datas';
+import { centavos, reais } from '../../common/dinheiro';
 import { CentrosCustoService } from '../centros-custo/centros-custo.service';
 import { ContaBancaria } from '../contas-bancarias/conta-bancaria.entity';
 import { ContasBancariasService } from '../contas-bancarias/contas-bancarias.service';
@@ -23,8 +24,7 @@ export interface MovimentacaoDaBaixa {
   data: string;
   descricao: string;
   origem: OrigemMovimentacao.CONTA_RECEBER | OrigemMovimentacao.CONTA_PAGAR;
-  contaReceberId?: string;
-  contaPagarId?: string;
+  baixaId: string;
 }
 
 const sinal = (m: Pick<MovimentacaoBancaria, 'tipo' | 'valor'>) =>
@@ -40,7 +40,7 @@ export class MovimentacoesService {
     private readonly centrosCusto: CentrosCustoService,
   ) {}
 
-  /** Chamado pela baixa de contas a receber e a pagar, dentro da transação delas. */
+  /** Chamado ao registrar uma baixa de conta a receber ou a pagar, dentro da transação dela. */
   async registrarBaixa(m: EntityManager, dados: MovimentacaoDaBaixa) {
     this.validarData(dados.contaBancaria, dados.data);
     const { contaBancaria, ...resto } = dados;
@@ -54,8 +54,8 @@ export class MovimentacoesService {
   }
 
   /** Chamado pelo estorno da baixa, dentro da transação dele. */
-  async removerDaBaixa(m: EntityManager, origem: { contaReceberId: string } | { contaPagarId: string }) {
-    await m.delete(MovimentacaoBancaria, origem);
+  async removerDaBaixa(m: EntityManager, baixaId: string) {
+    await m.delete(MovimentacaoBancaria, { baixaId });
   }
 
   findAll(empresaId: string, filtro: FiltroMovimentacaoDto) {

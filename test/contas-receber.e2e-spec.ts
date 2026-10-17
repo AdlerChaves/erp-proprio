@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { hoje } from '../src/common/datas';
 import {
   Acesso,
   api,
@@ -9,8 +10,6 @@ import {
   limparBanco,
   registrarEmpresa,
 } from './helpers';
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 describe('Contas a receber', () => {
   let app: INestApplication;
@@ -139,32 +138,45 @@ describe('Contas a receber', () => {
   describe('baixa', () => {
     it('exige a conta bancária de entrada', async () => {
       const conta = await criarConta(app, a.token, clienteId);
-      const res = await api(app, a.token).post(`/contas-receber/${conta.id}/baixa`).expect(400);
+      const res = await api(app, a.token).post(`/contas-receber/${conta.id}/baixas`).expect(400);
       expect(res.body.message.join()).toMatch(/contaBancariaId/);
     });
 
-    it('registra conta bancária, valor e data, com padrões para valor e data', async () => {
+    it('quita o saldo por padrão, com a data de hoje e a conta bancária informada', async () => {
       const conta = await criarConta(app, a.token, clienteId);
       const caixa = await criarContaBancaria(app, a.token);
       const res = await api(app, a.token)
-        .post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: caixa.id })
+        .post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: caixa.id })
         .expect(201);
-      expect(res.body).toMatchObject({
-        status: 'PAGA',
-        contaBancariaId: caixa.id,
-        contaBancaria: { id: caixa.id },
-        valorPago: 150.5,
-        dataPagamento: hoje(),
-      });
+      expect(res.body).toMatchObject({ status: 'PAGA', valorBaixado: 150.5, saldo: 0 });
+      expect(res.body.baixas).toEqual([
+        expect.objectContaining({
+          contaBancariaId: caixa.id,
+          contaBancaria: expect.objectContaining({ id: caixa.id }),
+          valor: 150.5,
+          juros: 0,
+          multa: 0,
+          desconto: 0,
+          valorTotal: 150.5,
+          data: hoje(),
+        }),
+      ]);
     });
 
-    it('aceita valor pago diferente (juros ou desconto) e data informada', async () => {
+    it('aceita juros, multa e desconto e data informada', async () => {
       const conta = await criarConta(app, a.token, clienteId);
       const caixa = await criarContaBancaria(app, a.token);
       const res = await api(app, a.token)
-        .post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: caixa.id, valorPago: 155.9, dataPagamento: '2099-01-12' })
+        .post(`/contas-receber/${conta.id}/baixas`, {
+          contaBancariaId: caixa.id,
+          juros: 4.4,
+          multa: 3.01,
+          desconto: 2,
+          data: '2099-01-12',
+        })
         .expect(201);
-      expect(res.body).toMatchObject({ valorPago: 155.9, dataPagamento: '2099-01-12' });
+      expect(res.body.status).toBe('PAGA');
+      expect(res.body.baixas[0]).toMatchObject({ valor: 150.5, valorTotal: 155.91, data: '2099-01-12' });
     });
 
     it('recusa conta bancária inativa ou de outra empresa', async () => {
@@ -174,16 +186,16 @@ describe('Contas a receber', () => {
       const b = await registrarEmpresa(app);
       const caixaB = await criarContaBancaria(app, b.token);
 
-      await api(app, a.token).post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: inativa.id }).expect(400);
-      await api(app, a.token).post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: caixaB.id }).expect(404);
+      await api(app, a.token).post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: inativa.id }).expect(400);
+      await api(app, a.token).post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: caixaB.id }).expect(404);
       const atual = await api(app, a.token).get(`/contas-receber/${conta.id}`).expect(200);
-      expect(atual.body).toMatchObject({ status: 'ABERTA', contaBancariaId: null });
+      expect(atual.body).toMatchObject({ status: 'ABERTA', baixas: [] });
     });
 
     it('a conta bancária com recebimentos não pode ser removida', async () => {
       const conta = await criarConta(app, a.token, clienteId);
       const caixa = await criarContaBancaria(app, a.token);
-      await api(app, a.token).post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: caixa.id }).expect(201);
+      await api(app, a.token).post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: caixa.id }).expect(201);
       await api(app, a.token).delete(`/contas-bancarias/${caixa.id}`).expect(409);
     });
   });
@@ -198,22 +210,22 @@ describe('Contas a receber', () => {
     });
 
     it('não recebe nova baixa nem cancelamento', async () => {
-      await api(app, a.token).post(`/contas-receber/${contaId}/baixa`, { contaBancariaId: caixaId }).expect(201);
-      await api(app, a.token).post(`/contas-receber/${contaId}/baixa`, { contaBancariaId: caixaId }).expect(400);
+      await api(app, a.token).post(`/contas-receber/${contaId}/baixas`, { contaBancariaId: caixaId }).expect(201);
+      await api(app, a.token).post(`/contas-receber/${contaId}/baixas`, { contaBancariaId: caixaId }).expect(400);
       await api(app, a.token).post(`/contas-receber/${contaId}/cancelamento`).expect(400);
     });
 
     it('cancelada não pode ser baixada', async () => {
       await api(app, a.token).post(`/contas-receber/${contaId}/cancelamento`).expect(201);
-      await api(app, a.token).post(`/contas-receber/${contaId}/baixa`, { contaBancariaId: caixaId }).expect(400);
+      await api(app, a.token).post(`/contas-receber/${contaId}/baixas`, { contaBancariaId: caixaId }).expect(400);
     });
 
     it('ainda pode ser classificada, mas não ter outros campos alterados', async () => {
-      await api(app, a.token).post(`/contas-receber/${contaId}/baixa`, { contaBancariaId: caixaId }).expect(201);
+      await api(app, a.token).post(`/contas-receber/${contaId}/baixas`, { contaBancariaId: caixaId }).expect(201);
       const rota = `/contas-receber/${contaId}`;
 
       const res = await api(app, a.token).patch(rota, { planoContaId: plano['1.01'] }).expect(200);
-      expect(res.body).toMatchObject({ status: 'PAGA', planoConta: { codigo: '1.01' }, contaBancariaId: caixaId });
+      expect(res.body).toMatchObject({ status: 'PAGA', planoConta: { codigo: '1.01' }, saldo: 0 });
 
       await api(app, a.token).patch(rota, { valor: 1 }).expect(400);
       await api(app, a.token).patch(rota, { planoContaId: plano['1.02'], descricao: 'Outra' }).expect(400);

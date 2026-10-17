@@ -1,28 +1,8 @@
-import { IsDateString, IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { StatusContaReceber } from '../conta-receber.entity';
+import { IsOptional, IsUUID } from 'class-validator';
+import { FiltroContasDto } from '../../financeiro/dto/filtro-contas.dto';
 
-export class FiltroContaReceberDto {
+export class FiltroContaReceberDto extends FiltroContasDto {
   @IsOptional()
   @IsUUID()
   clienteId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  planoContaId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  centroCustoId?: string;
-
-  @IsOptional()
-  @IsEnum(StatusContaReceber)
-  status?: StatusContaReceber;
-
-  @IsOptional()
-  @IsDateString({ strict: true })
-  vencimentoDe?: string;
-
-  @IsOptional()
-  @IsDateString({ strict: true })
-  vencimentoAte?: string;
 }

@@ -11,9 +11,8 @@ import {
 import { decimalTransformer } from '../../common/decimal.transformer';
 import { CentroCusto } from '../centros-custo/centro-custo.entity';
 import { ContaBancaria } from '../contas-bancarias/conta-bancaria.entity';
-import { ContaPagar } from '../contas-pagar/conta-pagar.entity';
-import { ContaReceber } from '../contas-receber/conta-receber.entity';
 import { Empresa } from '../empresas/empresa.entity';
+import { Baixa } from '../financeiro/baixa.entity';
 import { PlanoConta } from '../plano-contas/plano-conta.entity';
 
 export enum TipoMovimentacao {
@@ -22,9 +21,9 @@ export enum TipoMovimentacao {
 }
 
 export enum OrigemMovimentacao {
-  /** Gerada pela baixa de uma conta a receber; some com o estorno. */
+  /** Gerada por uma baixa de conta a receber; some com o estorno da baixa. */
   CONTA_RECEBER = 'CONTA_RECEBER',
-  /** Gerada pela baixa de uma conta a pagar; some com o estorno. */
+  /** Gerada por uma baixa de conta a pagar; some com o estorno da baixa. */
   CONTA_PAGAR = 'CONTA_PAGAR',
   /** Uma das duas pernas de uma transferência entre contas da empresa. */
   TRANSFERENCIA = 'TRANSFERENCIA',
@@ -37,8 +36,7 @@ export enum OrigemMovimentacao {
 @Check('CHK_movimentacoes_bancarias_valor', '"valor" > 0')
 @Index('IDX_movimentacoes_bancarias_conta_data', ['contaBancariaId', 'data'])
 @Index('IDX_movimentacoes_bancarias_empresa_data', ['empresaId', 'data'])
-@Index('UQ_movimentacoes_bancarias_conta_receber', ['contaReceberId'], { unique: true })
-@Index('UQ_movimentacoes_bancarias_conta_pagar', ['contaPagarId'], { unique: true })
+@Index('UQ_movimentacoes_bancarias_baixa', ['baixaId'], { unique: true })
 @Index('IDX_movimentacoes_bancarias_transferencia', ['transferenciaId'])
 @Index('IDX_movimentacoes_bancarias_plano_conta', ['planoContaId'])
 @Index('IDX_movimentacoes_bancarias_centro_custo', ['centroCustoId'])
@@ -76,19 +74,13 @@ export class MovimentacaoBancaria {
   @Column({ type: 'enum', enum: OrigemMovimentacao })
   origem: OrigemMovimentacao;
 
-  @Column({ name: 'conta_receber_id', type: 'uuid', nullable: true })
-  contaReceberId: string | null;
+  /** Baixa que gerou esta movimentação, nas origens CONTA_RECEBER e CONTA_PAGAR. */
+  @Column({ name: 'baixa_id', type: 'uuid', nullable: true })
+  baixaId: string | null;
 
-  @ManyToOne(() => ContaReceber, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'conta_receber_id', foreignKeyConstraintName: 'FK_movimentacoes_bancarias_conta_receber' })
-  contaReceber: ContaReceber | null;
-
-  @Column({ name: 'conta_pagar_id', type: 'uuid', nullable: true })
-  contaPagarId: string | null;
-
-  @ManyToOne(() => ContaPagar, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'conta_pagar_id', foreignKeyConstraintName: 'FK_movimentacoes_bancarias_conta_pagar' })
-  contaPagar: ContaPagar | null;
+  @ManyToOne(() => Baixa, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'baixa_id', foreignKeyConstraintName: 'FK_movimentacoes_bancarias_baixa' })
+  baixa: Baixa | null;
 
   /** Igual nas duas pernas de uma mesma transferência. */
   @Column({ name: 'transferencia_id', type: 'uuid', nullable: true })

@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { hoje } from '../src/common/datas';
 import { Perfil } from '../src/modules/usuarios/perfil.enum';
 import {
   Acesso,
@@ -11,8 +12,6 @@ import {
   limparBanco,
   registrarEmpresa,
 } from './helpers';
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 describe('Movimentações bancárias', () => {
   let app: INestApplication;
@@ -56,7 +55,8 @@ describe('Movimentações bancárias', () => {
     return body.contas.find((c: { contaBancaria: { id: string } }) => c.contaBancaria.id === contaId).saldo as number;
   };
 
-  const contaPaga = async (tipo: 'receber' | 'pagar', valorPago: number, dataPagamento = hoje()) => {
+  /** Conta quitada no banco pelo total pedido; a receber vale 150,50, e a diferença vira juros ou desconto. */
+  const contaPaga = async (tipo: 'receber' | 'pagar', total: number, data = hoje()) => {
     const conta =
       tipo === 'receber'
         ? await criarConta(app, a.token, (await criarCliente(app, a.token)).id)
@@ -65,13 +65,18 @@ describe('Movimentações bancárias', () => {
               .post('/contas-pagar', {
                 fornecedorId: (await criarFornecedor(app, a.token)).id,
                 descricao: 'Aluguel',
-                valor: valorPago,
+                valor: total,
                 dataVencimento: '2099-01-01',
               })
               .expect(201)
           ).body;
     await api(app, a.token)
-      .post(`/contas-${tipo}/${conta.id}/baixa`, { contaBancariaId: banco, valorPago, dataPagamento })
+      .post(`/contas-${tipo}/${conta.id}/baixas`, {
+        contaBancariaId: banco,
+        juros: tipo === 'receber' ? Math.max(0, Math.round((total - 150.5) * 100) / 100) : 0,
+        desconto: tipo === 'receber' ? Math.max(0, Math.round((150.5 - total) * 100) / 100) : 0,
+        data,
+      })
       .expect(201);
     return conta.id as string;
   };
@@ -81,10 +86,23 @@ describe('Movimentações bancárias', () => {
       const receberId = await contaPaga('receber', 150.5);
       const pagarId = await contaPaga('pagar', 400);
 
+      const baixaDe = async (rota: string) => (await api(app, a.token).get(rota).expect(200)).body.baixas[0].id;
       const { body } = await api(app, a.token).get(`/movimentacoes?contaBancariaId=${banco}`).expect(200);
       expect(body).toEqual([
-        expect.objectContaining({ tipo: 'ENTRADA', valor: 150.5, origem: 'CONTA_RECEBER', contaReceberId: receberId, descricao: 'Recebimento: Venda' }),
-        expect.objectContaining({ tipo: 'SAIDA', valor: 400, origem: 'CONTA_PAGAR', contaPagarId: pagarId, descricao: 'Pagamento: Aluguel' }),
+        expect.objectContaining({
+          tipo: 'ENTRADA',
+          valor: 150.5,
+          origem: 'CONTA_RECEBER',
+          baixaId: await baixaDe(`/contas-receber/${receberId}`),
+          descricao: 'Recebimento: Venda',
+        }),
+        expect.objectContaining({
+          tipo: 'SAIDA',
+          valor: 400,
+          origem: 'CONTA_PAGAR',
+          baixaId: await baixaDe(`/contas-pagar/${pagarId}`),
+          descricao: 'Pagamento: Aluguel',
+        }),
       ]);
       expect(await saldoDe(banco)).toBe(750.5);
     });
@@ -92,7 +110,7 @@ describe('Movimentações bancárias', () => {
     it('não aceita pagamento com data anterior ao saldo inicial da conta', async () => {
       const conta = await criarConta(app, a.token, (await criarCliente(app, a.token)).id);
       await api(app, a.token)
-        .post(`/contas-receber/${conta.id}/baixa`, { contaBancariaId: banco, dataPagamento: '2025-12-31' })
+        .post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: banco, data: '2025-12-31' })
         .expect(400);
       const atual = await api(app, a.token).get(`/contas-receber/${conta.id}`).expect(200);
       expect(atual.body.status).toBe('ABERTA');
@@ -112,20 +130,22 @@ describe('Movimentações bancárias', () => {
       const id = await contaPaga(tipo, 200);
       const rota = `/contas-${tipo}/${id}`;
 
-      const res = await api(app, a.token).post(`${rota}/estorno`).expect(201);
-      expect(res.body).toMatchObject({ status: 'ABERTA', valorPago: null, dataPagamento: null, contaBancariaId: null });
+      const { body: paga } = await api(app, a.token).get(rota).expect(200);
+      const res = await api(app, a.token).delete(`${rota}/baixas/${paga.baixas[0].id}`).expect(200);
+      expect(res.body).toMatchObject({ status: 'ABERTA', baixas: [], valorBaixado: 0 });
       await api(app, a.token).get('/movimentacoes').expect(200, []);
       expect(await saldoDe(banco)).toBe(1000);
 
-      await api(app, a.token).post(`${rota}/baixa`, { contaBancariaId: caixa }).expect(201);
+      await api(app, a.token).post(`${rota}/baixas`, { contaBancariaId: caixa }).expect(201);
       expect(await saldoDe(caixa)).toBe(tipo === 'receber' ? 150.5 : -200);
     });
 
-    it('só estorna conta paga', async () => {
-      const conta = await criarConta(app, a.token, (await criarCliente(app, a.token)).id);
-      await api(app, a.token).post(`/contas-receber/${conta.id}/estorno`).expect(400);
-      await api(app, a.token).post(`/contas-receber/${conta.id}/cancelamento`).expect(201);
-      await api(app, a.token).post(`/contas-receber/${conta.id}/estorno`).expect(400);
+    it('só estorna baixa da própria conta', async () => {
+      const paga = await contaPaga('receber', 150.5);
+      const outra = await criarConta(app, a.token, (await criarCliente(app, a.token)).id);
+      const { body } = await api(app, a.token).get(`/contas-receber/${paga}`).expect(200);
+      await api(app, a.token).delete(`/contas-receber/${outra.id}/baixas/${body.baixas[0].id}`).expect(404);
+      await api(app, a.token).delete(`/contas-pagar/${paga}/baixas/${body.baixas[0].id}`).expect(404);
     });
   });
 
@@ -301,7 +321,8 @@ describe('Movimentações bancárias', () => {
     it('estorno exige ADMIN ou FINANCEIRO', async () => {
       const id = await contaPaga('receber', 10);
       const consulta = await adicionarUsuario(app, a, Perfil.CONSULTA);
-      await api(app, consulta.token).post(`/contas-receber/${id}/estorno`).expect(403);
+      const { body } = await api(app, a.token).get(`/contas-receber/${id}`).expect(200);
+      await api(app, consulta.token).delete(`/contas-receber/${id}/baixas/${body.baixas[0].id}`).expect(403);
     });
   });
 });

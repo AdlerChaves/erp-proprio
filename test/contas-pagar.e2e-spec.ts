@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { hoje } from '../src/common/datas';
 import { Perfil } from '../src/modules/usuarios/perfil.enum';
 import {
   Acesso,
@@ -10,8 +11,6 @@ import {
   limparBanco,
   registrarEmpresa,
 } from './helpers';
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 describe('Contas a pagar', () => {
   let app: INestApplication;
@@ -51,7 +50,8 @@ describe('Contas a pagar', () => {
       fornecedor: { id: fornecedorId },
       planoConta: { codigo: '2.03.01', nome: 'Aluguel e condomínio' },
       centroCusto: { nome: 'Matriz' },
-      contaBancariaId: null,
+      baixas: [],
+      saldo: 2500,
     });
   });
 
@@ -92,14 +92,15 @@ describe('Contas a pagar', () => {
       const { body } = await novaConta().expect(201);
       const caixa = await criarContaBancaria(app, a.token);
 
-      await api(app, a.token).post(`/contas-pagar/${body.id}/baixa`).expect(400);
+      await api(app, a.token).post(`/contas-pagar/${body.id}/baixas`).expect(400);
       const res = await api(app, a.token)
-        .post(`/contas-pagar/${body.id}/baixa`, { contaBancariaId: caixa.id, valorPago: 2550.3 })
+        .post(`/contas-pagar/${body.id}/baixas`, { contaBancariaId: caixa.id, multa: 50, juros: 0.3 })
         .expect(201);
-      expect(res.body).toMatchObject({
-        status: 'PAGA',
-        valorPago: 2550.3,
-        dataPagamento: hoje(),
+      expect(res.body).toMatchObject({ status: 'PAGA', saldo: 0 });
+      expect(res.body.baixas[0]).toMatchObject({
+        valor: 2500,
+        valorTotal: 2550.3,
+        data: hoje(),
         contaBancaria: { id: caixa.id },
       });
     });
@@ -108,23 +109,23 @@ describe('Contas a pagar', () => {
       const { body } = await novaConta().expect(201);
       const caixa = await criarContaBancaria(app, a.token);
       await api(app, a.token).patch(`/contas-bancarias/${caixa.id}`, { ativo: false }).expect(200);
-      await api(app, a.token).post(`/contas-pagar/${body.id}/baixa`, { contaBancariaId: caixa.id }).expect(400);
+      await api(app, a.token).post(`/contas-pagar/${body.id}/baixas`, { contaBancariaId: caixa.id }).expect(400);
     });
 
     it('paga ou cancelada: sem nova baixa, e só a classificação pode mudar', async () => {
       const { body } = await novaConta().expect(201);
       const caixa = await criarContaBancaria(app, a.token);
       const rota = `/contas-pagar/${body.id}`;
-      await api(app, a.token).post(`${rota}/baixa`, { contaBancariaId: caixa.id }).expect(201);
+      await api(app, a.token).post(`${rota}/baixas`, { contaBancariaId: caixa.id }).expect(201);
 
-      await api(app, a.token).post(`${rota}/baixa`, { contaBancariaId: caixa.id }).expect(400);
+      await api(app, a.token).post(`${rota}/baixas`, { contaBancariaId: caixa.id }).expect(400);
       await api(app, a.token).post(`${rota}/cancelamento`).expect(400);
       await api(app, a.token).patch(rota, { valor: 1 }).expect(400);
       await api(app, a.token).patch(rota, { planoContaId: plano['2.03.01'] }).expect(200);
 
       const cancelada = await novaConta().expect(201);
       await api(app, a.token).post(`/contas-pagar/${cancelada.body.id}/cancelamento`).expect(201);
-      await api(app, a.token).post(`/contas-pagar/${cancelada.body.id}/baixa`, { contaBancariaId: caixa.id }).expect(400);
+      await api(app, a.token).post(`/contas-pagar/${cancelada.body.id}/baixas`, { contaBancariaId: caixa.id }).expect(400);
     });
   });
 
@@ -132,7 +133,7 @@ describe('Contas a pagar', () => {
     it('fornecedor, categoria e conta bancária em uso não podem ser removidos', async () => {
       const { body } = await novaConta({ planoContaId: plano['2.03.01'] }).expect(201);
       const caixa = await criarContaBancaria(app, a.token);
-      await api(app, a.token).post(`/contas-pagar/${body.id}/baixa`, { contaBancariaId: caixa.id }).expect(201);
+      await api(app, a.token).post(`/contas-pagar/${body.id}/baixas`, { contaBancariaId: caixa.id }).expect(201);
 
       await api(app, a.token).delete(`/fornecedores/${fornecedorId}`).expect(409);
       await api(app, a.token).delete(`/plano-contas/${plano['2.03.01']}`).expect(409);
@@ -155,7 +156,7 @@ describe('Contas a pagar', () => {
       await api(app, b.token).get(`/contas-pagar?fornecedorId=${fornecedorId}`).expect(200, []);
       await api(app, b.token).get(`/contas-pagar/${contaA}`).expect(404);
       await api(app, b.token).patch(`/contas-pagar/${contaA}`, { descricao: 'Invadida' }).expect(404);
-      await api(app, b.token).post(`/contas-pagar/${contaA}/baixa`, { contaBancariaId: caixaB.id }).expect(404);
+      await api(app, b.token).post(`/contas-pagar/${contaA}/baixas`, { contaBancariaId: caixaB.id }).expect(404);
       await api(app, b.token).post(`/contas-pagar/${contaA}/cancelamento`).expect(404);
 
       const res = await api(app, a.token).get(`/contas-pagar/${contaA}`).expect(200);
@@ -170,7 +171,7 @@ describe('Contas a pagar', () => {
 
       await novaConta({ fornecedorId: fornecedorB.id }).expect(404);
       await novaConta({ planoContaId: aluguelB }).expect(404);
-      await api(app, a.token).post(`/contas-pagar/${contaA}/baixa`, { contaBancariaId: caixaB.id }).expect(404);
+      await api(app, a.token).post(`/contas-pagar/${contaA}/baixas`, { contaBancariaId: caixaB.id }).expect(404);
     });
   });
 
@@ -186,7 +187,7 @@ describe('Contas a pagar', () => {
 
       await api(app, usuario.token).get('/contas-pagar').expect(leitura);
       await novaConta({}, usuario.token).expect(escrita);
-      await api(app, usuario.token).post(`/contas-pagar/${body.id}/baixa`, { contaBancariaId: caixa.id }).expect(escrita);
+      await api(app, usuario.token).post(`/contas-pagar/${body.id}/baixas`, { contaBancariaId: caixa.id }).expect(escrita);
     });
   });
 });

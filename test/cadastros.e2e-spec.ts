@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { hoje } from '../src/common/datas';
 import { Perfil } from '../src/modules/usuarios/perfil.enum';
 import {
   Acesso,
@@ -10,8 +11,6 @@ import {
   limparBanco,
   registrarEmpresa,
 } from './helpers';
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 describe('Cadastros', () => {
   let app: INestApplication;

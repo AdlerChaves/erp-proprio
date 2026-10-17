@@ -1,32 +1,15 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsUUID, Length } from 'class-validator';
+import { IsInt, IsUUID, Max, Min } from 'class-validator';
+import { DadosContaDto } from '../../financeiro/dto/dados-conta.dto';
 
-export class CreateContaReceberDto {
+export class CreateContaReceberDto extends DadosContaDto {
   @IsUUID()
   clienteId: string;
+}
 
-  @IsNotEmpty()
-  @Length(1, 255)
-  descricao: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  valor: number;
-
-  /** Padrão: data de hoje. */
-  @IsOptional()
-  @IsDateString({ strict: true })
-  dataEmissao?: string;
-
-  @IsDateString({ strict: true })
-  dataVencimento: string;
-
-  /** Categoria de receita analítica e ativa. Envie null na alteração para remover. */
-  @IsOptional()
-  @IsUUID()
-  planoContaId?: string | null;
-
-  /** Envie null na alteração para remover. */
-  @IsOptional()
-  @IsUUID()
-  centroCustoId?: string | null;
+/** valor é o total, dividido entre as parcelas; dataVencimento é o da primeira, e as demais vencem mês a mês. */
+export class CreateParcelamentoContaReceberDto extends CreateContaReceberDto {
+  @IsInt()
+  @Min(2)
+  @Max(120)
+  parcelas: number;
 }
