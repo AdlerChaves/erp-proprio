@@ -1,7 +1,7 @@
-import { DataSourceOptions } from 'typeorm';
+import { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 
 // Compartilhado entre a aplicação e o CLI de migrations.
-export function databaseOptions(): DataSourceOptions {
+export function databaseOptions(): PostgresConnectionOptions {
   return {
     type: 'postgres',
     host: process.env.DB_HOST ?? 'localhost',

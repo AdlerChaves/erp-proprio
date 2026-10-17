@@ -62,6 +62,22 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 
 O documento do cliente é único dentro da empresa. Um cliente com contas a receber não pode ser removido (FK `RESTRICT`).
 
+## Testes
+
+Os testes e2e sobem a aplicação em processo e usam um PostgreSQL real, no mesmo servidor do `.env`, mas sempre no banco `erp_test` (ou em `DB_TEST_NAME`, que precisa terminar com `_test`). Esse banco é apagado, recriado e migrado a cada execução, e as tabelas são esvaziadas antes de cada teste.
+
+```bash
+docker compose up -d db
+npm run test:e2e
+```
+
+| Arquivo | Cobre |
+|---|---|
+| `test/auth.e2e-spec.ts` | Token, registro, login e troca de senha |
+| `test/isolamento.e2e-spec.ts` | Uma empresa não lê nem altera dados de outra |
+| `test/perfis.e2e-spec.ts` | Matriz de permissões por perfil, bloqueio e regra do último administrador |
+| `test/multiempresa.e2e-spec.ts` | Usuário em várias empresas: login, troca e criação de empresa |
+
 ## Migrations
 
 O schema é controlado só por migrations (`synchronize: false`).
