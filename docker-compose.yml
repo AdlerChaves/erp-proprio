@@ -26,6 +26,10 @@ services:
       DB_NAME: ${DB_NAME:-erp}
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-28800}
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Sao_Paulo}
+      # Ambiente de desenvolvimento: mantém o Swagger em /docs. Desligue ao publicar.
+      SWAGGER_HABILITADO: ${SWAGGER_HABILITADO:-true}
+      CORS_ORIGENS: ${CORS_ORIGENS:-}
     ports:
       - "${PORT:-3000}:3000"
     depends_on:

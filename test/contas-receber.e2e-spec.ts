@@ -149,6 +149,7 @@ describe('Contas a receber', () => {
         .post(`/contas-receber/${conta.id}/baixas`, { contaBancariaId: caixa.id })
         .expect(201);
       expect(res.body).toMatchObject({ status: 'PAGA', valorBaixado: 150.5, saldo: 0 });
+      expect(res.body.baixas[0]).not.toHaveProperty('seq');
       expect(res.body.baixas).toEqual([
         expect.objectContaining({
           contaBancariaId: caixa.id,

@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { databaseOptions } from './config/database.config';
 import { HealthController } from './health/health.controller';
+import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CentrosCustoModule } from './modules/centros-custo/centros-custo.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
@@ -23,6 +25,9 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     TypeOrmModule.forRootAsync({
       useFactory: () => ({ ...databaseOptions(), autoLoadEntities: true }),
     }),
+    // Limite geral por IP (THROTTLE_LIMITE por minuto, padrão 300); login e cadastro têm limite próprio.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: () => Number(process.env.THROTTLE_LIMITE ?? 300) }]),
+    AuditoriaModule,
     AuthModule,
     EmpresasModule,
     UsuariosModule,

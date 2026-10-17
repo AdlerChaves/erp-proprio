@@ -1,4 +1,14 @@
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Generated,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { decimalTransformer } from '../../common/decimal.transformer';
 import { ContaBancaria } from '../contas-bancarias/conta-bancaria.entity';
 import { ContaPagar } from '../contas-pagar/conta-pagar.entity';
@@ -72,4 +82,12 @@ export class Baixa {
 
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;
+
+  /**
+   * Ordem de gravação, gerada pelo banco: desempata baixas do mesmo dia sem depender do relógio.
+   * Carregável porque o TypeORM não ordena relações por colunas ocultas; o serviço a remove da resposta.
+   */
+  @Column({ type: 'bigint' })
+  @Generated('increment')
+  seq: string;
 }

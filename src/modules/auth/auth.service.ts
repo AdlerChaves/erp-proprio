@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 import { Empresa } from '../empresas/empresa.entity';
 import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
@@ -18,17 +19,25 @@ import { RegistrarDto } from './dto/registrar.dto';
 import { Sessao, TokenPayload } from './sessao';
 import { gerarHashSenha, obterHashFicticio, verificarSenha } from './senha';
 
+/** Senhas erradas seguidas que bloqueiam a conta. */
+export const MAXIMO_TENTATIVAS_LOGIN = 5;
+export const MINUTOS_BLOQUEIO = 15;
+
+/** A mesma resposta para e-mail inexistente, senha errada e conta bloqueada, para não revelar quais contas existem. */
+export const MENSAGEM_LOGIN_RECUSADO = 'E-mail ou senha inválidos, ou acesso bloqueado temporariamente por excesso de tentativas';
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly jwt: JwtService,
+    private readonly auditoria: AuditoriaService,
     @InjectRepository(Usuario) private readonly usuarios: Repository<Usuario>,
     @InjectRepository(UsuarioEmpresa) private readonly vinculos: Repository<UsuarioEmpresa>,
   ) {}
 
   /** Cadastro inicial: cria a empresa e o usuário administrador dela. */
-  async registrar(dto: RegistrarDto) {
+  async registrar(dto: RegistrarDto, ip: string) {
     const { usuarioId, empresaId } = await this.dataSource.transaction(async (m) => {
       if (await m.existsBy(Usuario, { email: dto.usuario.email })) {
         throw new ConflictException(
@@ -52,17 +61,34 @@ export class AuthService {
       );
       return { usuarioId: usuario.id, empresaId: empresa.id };
     });
-    return this.emitirToken(usuarioId, empresaId);
+    await this.auditoria.registrar({ empresaId, usuarioId, acao: 'REGISTRO', recurso: 'empresas', recursoId: empresaId, ip });
+    return this.emitirToken(usuarioId, empresaId, 1);
   }
 
-  async login(dto: LoginDto) {
+  /**
+   * Depois de MAXIMO_TENTATIVAS_LOGIN senhas erradas seguidas, a conta fica bloqueada por MINUTOS_BLOQUEIO,
+   * mesmo para a senha certa. A resposta é a mesma em todos os casos de recusa.
+   */
+  async login(dto: LoginDto, ip: string) {
     const usuario = await this.usuarios.findOne({
       where: { email: dto.email },
-      select: { id: true, ativo: true, senhaHash: true },
+      select: { id: true, ativo: true, senhaHash: true, tokenVersao: true, tentativasLogin: true, bloqueadoAte: true },
     });
     const senhaOk = await verificarSenha(dto.senha, usuario?.senhaHash ?? (await obterHashFicticio()));
-    if (!usuario || !senhaOk || !usuario.ativo) {
-      throw new UnauthorizedException('E-mail ou senha inválidos');
+    const bloqueado = !!usuario?.bloqueadoAte && usuario.bloqueadoAte > new Date();
+
+    if (!usuario || !usuario.ativo || bloqueado || !senhaOk) {
+      if (usuario && usuario.ativo && !bloqueado) {
+        await this.registrarSenhaErrada(usuario.id, ip);
+      } else {
+        await this.auditoria.registrar({
+          usuarioId: usuario?.id ?? null,
+          acao: bloqueado ? 'LOGIN_RECUSADO_BLOQUEIO' : 'LOGIN_FALHOU',
+          dados: usuario ? null : { email: dto.email },
+          ip,
+        });
+      }
+      throw new UnauthorizedException(MENSAGEM_LOGIN_RECUSADO);
     }
 
     const empresas = await this.empresasDoUsuario(usuario.id);
@@ -78,7 +104,12 @@ export class AuthService {
     if (!empresas.some((e) => e.id === empresaId)) {
       throw new UnauthorizedException('Sem acesso a esta empresa');
     }
-    return this.emitirToken(usuario.id, empresaId);
+
+    if (usuario.tentativasLogin || usuario.bloqueadoAte) {
+      await this.usuarios.update(usuario.id, { tentativasLogin: 0, bloqueadoAte: null });
+    }
+    await this.auditoria.registrar({ empresaId, usuarioId: usuario.id, acao: 'LOGIN', ip });
+    return this.emitirToken(usuario.id, empresaId, usuario.tokenVersao);
   }
 
   async trocarEmpresa(sessao: Sessao, empresaId: string) {
@@ -86,7 +117,7 @@ export class AuthService {
     if (!empresas.some((e) => e.id === empresaId)) {
       throw new UnauthorizedException('Sem acesso a esta empresa');
     }
-    return this.emitirToken(sessao.usuarioId, empresaId);
+    return this.emitirToken(sessao.usuarioId, empresaId, sessao.tokenVersao);
   }
 
   async me(sessao: Sessao) {
@@ -99,15 +130,45 @@ export class AuthService {
     };
   }
 
+  /** Troca a senha e invalida todos os tokens emitidos antes; devolve um token novo para a sessão atual. */
   async alterarSenha(sessao: Sessao, dto: AlterarSenhaDto) {
     const usuario = await this.usuarios.findOneOrFail({
       where: { id: sessao.usuarioId },
-      select: { id: true, senhaHash: true },
+      select: { id: true, senhaHash: true, tokenVersao: true },
     });
     if (!(await verificarSenha(dto.senhaAtual, usuario.senhaHash))) {
       throw new BadRequestException('Senha atual incorreta');
     }
-    await this.usuarios.update(usuario.id, { senhaHash: await gerarHashSenha(dto.novaSenha) });
+    const tokenVersao = usuario.tokenVersao + 1;
+    await this.usuarios.update(usuario.id, { senhaHash: await gerarHashSenha(dto.novaSenha), tokenVersao });
+    return this.emitirToken(usuario.id, sessao.empresaId, tokenVersao);
+  }
+
+  /** Invalida todos os tokens do usuário, inclusive o desta requisição. */
+  async encerrarSessoes(sessao: Sessao) {
+    await this.usuarios.increment({ id: sessao.usuarioId }, 'tokenVersao', 1);
+  }
+
+  /** Conta a senha errada de forma atômica e bloqueia a conta ao atingir o limite. */
+  private async registrarSenhaErrada(usuarioId: string, ip: string) {
+    const resultado = await this.usuarios
+      .createQueryBuilder()
+      .update()
+      .set({ tentativasLogin: () => 'tentativas_login + 1' })
+      .where('id = :usuarioId', { usuarioId })
+      .returning('tentativas_login')
+      .execute();
+    const tentativas = Number(resultado.raw[0].tentativas_login);
+
+    if (tentativas >= MAXIMO_TENTATIVAS_LOGIN) {
+      await this.usuarios.update(usuarioId, {
+        tentativasLogin: 0,
+        bloqueadoAte: new Date(Date.now() + MINUTOS_BLOQUEIO * 60_000),
+      });
+      await this.auditoria.registrar({ usuarioId, acao: 'CONTA_BLOQUEADA', dados: { tentativas }, ip });
+    } else {
+      await this.auditoria.registrar({ usuarioId, acao: 'LOGIN_FALHOU', dados: { tentativas }, ip });
+    }
   }
 
   private async empresasDoUsuario(usuarioId: string) {
@@ -124,8 +185,8 @@ export class AuthService {
     }));
   }
 
-  private async emitirToken(usuarioId: string, empresaId: string) {
-    const payload: TokenPayload = { sub: usuarioId, empresaId };
+  private async emitirToken(usuarioId: string, empresaId: string, tokenVersao: number) {
+    const payload: TokenPayload = { sub: usuarioId, empresaId, ver: tokenVersao };
     return { accessToken: await this.jwt.signAsync(payload), empresaId };
   }
 }

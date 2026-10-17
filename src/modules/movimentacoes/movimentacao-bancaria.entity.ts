@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Generated,
   Index,
   JoinColumn,
   ManyToOne,
@@ -103,4 +104,9 @@ export class MovimentacaoBancaria {
 
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;
+
+  /** Ordem de gravação, gerada pelo banco: desempata registros do mesmo dia sem depender do relógio. */
+  @Column({ type: 'bigint', select: false })
+  @Generated('increment')
+  seq: string;
 }

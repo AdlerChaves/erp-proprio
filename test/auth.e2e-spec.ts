@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { MENSAGEM_LOGIN_RECUSADO } from '../src/modules/auth/auth.service';
 import { api, criarApp, limparBanco, registrarEmpresa, SENHA } from './helpers';
 
 describe('Autenticação', () => {
@@ -95,7 +96,7 @@ describe('Autenticação', () => {
       const semConta = await api(app)
         .post('/auth/login', { email: 'ninguem@teste.com', senha: 'errada123' })
         .expect(401);
-      expect(senhaErrada.body.message).toBe('E-mail ou senha inválidos');
+      expect(senhaErrada.body.message).toBe(MENSAGEM_LOGIN_RECUSADO);
       expect(semConta.body.message).toBe(senhaErrada.body.message);
     });
   });
@@ -108,7 +109,8 @@ describe('Autenticação', () => {
 
     it('troca a senha: a nova passa a valer e a antiga não', async () => {
       const { token, email } = await registrarEmpresa(app);
-      await api(app, token).patch('/auth/senha', { senhaAtual: SENHA, novaSenha: 'nova123456' }).expect(204);
+      const res = await api(app, token).patch('/auth/senha', { senhaAtual: SENHA, novaSenha: 'nova123456' }).expect(200);
+      expect(res.body.accessToken).toEqual(expect.any(String));
       await api(app).post('/auth/login', { email, senha: 'nova123456' }).expect(200);
       await api(app).post('/auth/login', { email, senha: SENHA }).expect(401);
     });

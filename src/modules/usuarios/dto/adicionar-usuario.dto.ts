@@ -1,4 +1,5 @@
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, Length } from 'class-validator';
+import { SenhaForte } from '../../../common/validadores/senha-forte';
 import { Perfil } from '../perfil.enum';
 import { NormalizarEmail } from './email.transform';
 
@@ -15,7 +16,7 @@ export class AdicionarUsuarioDto {
 
   /** Obrigatória só se o e-mail ainda não tiver conta. */
   @IsOptional()
-  @Length(8, 72)
+  @SenhaForte()
   senha?: string;
 
   @IsEnum(Perfil)

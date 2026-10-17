@@ -1,9 +1,10 @@
-import { IsNotEmpty, Length } from 'class-validator';
+import { IsNotEmpty } from 'class-validator';
+import { SenhaForte } from '../../../common/validadores/senha-forte';
 
 export class AlterarSenhaDto {
   @IsNotEmpty()
   senhaAtual: string;
 
-  @Length(8, 72)
+  @SenhaForte()
   novaSenha: string;
 }

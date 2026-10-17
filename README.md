@@ -7,7 +7,7 @@ API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadas
 ## Rodando com Docker
 
 ```bash
-cp .env.example .env   # e troque o JWT_SECRET (openssl rand -hex 32)
+cp .env.example .env   # e troque o JWT_SECRET (openssl rand -hex 32); a API não sobe com o valor de exemplo
 docker compose up --build
 ```
 
@@ -40,6 +40,23 @@ npm run start:dev
 
 A empresa sempre mantém pelo menos um `ADMIN` ativo.
 
+## Segurança
+
+| Proteção | Como funciona |
+|---|---|
+| Limite de requisições | Por IP e por minuto: `THROTTLE_LIMITE` (padrão 300) em geral e `THROTTLE_LOGIN_LIMITE` (padrão 10) em login e cadastro. Vale antes da autenticação; acima do limite, a API responde 429. |
+| Bloqueio de conta | 5 senhas erradas seguidas bloqueiam a conta por 15 minutos, mesmo para a senha certa. E-mail inexistente, senha errada e conta bloqueada recebem a mesma resposta. |
+| Revogação de tokens | Trocar a senha ou chamar `POST /api/auth/sessoes/encerrar` invalida todos os tokens já emitidos. Perfil e bloqueio de acesso também valem na hora. |
+| Senhas | Entre 8 e 72 caracteres, fora de uma lista de senhas muito comuns; guardadas com scrypt. |
+| Auditoria | Toda escrita autenticada bem-sucedida é registrada com usuário, empresa, rota, id e corpo (senhas e tokens viram `***`), além de cadastro, login, falhas e bloqueios. Consulta em `GET /api/auditoria` (só `ADMIN`). |
+| Cabeçalhos HTTP | `helmet` (HSTS, `nosniff`, proteção contra frames, sem `X-Powered-By`). |
+| CORS | Nenhuma origem é autorizada, a menos que listada em `CORS_ORIGENS`. |
+| Segredo do JWT | A API não sobe com `JWT_SECRET` com menos de 32 caracteres ou com o valor de exemplo. |
+| Swagger | Desligado quando `NODE_ENV=production`, a menos que `SWAGGER_HABILITADO=true` (o `docker-compose.yml` de desenvolvimento liga). |
+| Dependências | O CI falha se `npm audit` encontrar vulnerabilidade moderada ou pior nas dependências de produção. |
+
+Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite por IP e a auditoria vejam o IP real do cliente.
+
 ## Endpoints
 
 | Método | Rota | Descrição |
@@ -49,7 +66,8 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | POST | `/api/auth/login` | Login com `email`, `senha` e `empresaId` opcional (público) |
 | POST | `/api/auth/trocar-empresa` | Novo token para outra empresa do usuário |
 | GET | `/api/auth/me` | Usuário logado, perfil e empresas acessíveis |
-| PATCH | `/api/auth/senha` | Altera a própria senha |
+| PATCH | `/api/auth/senha` | Altera a própria senha; invalida os tokens anteriores e devolve um novo |
+| POST | `/api/auth/sessoes/encerrar` | Sai de todos os dispositivos (invalida todos os tokens do usuário) |
 | GET/PATCH | `/api/empresas/atual` | Consulta / altera a empresa atual (alterar: `ADMIN`) |
 | POST | `/api/empresas` | Cria outra empresa com o usuário logado como `ADMIN` |
 | GET/POST | `/api/usuarios` | Lista / dá acesso a usuários da empresa (`ADMIN`) |
@@ -86,6 +104,7 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | DELETE | `/api/movimentacoes/:id` | Remove avulsa ou as duas pernas de uma transferência |
 | GET | `/api/movimentacoes/saldos?data=` | Saldo de cada conta ao fim do dia (padrão: hoje) |
 | GET | `/api/movimentacoes/extrato?contaBancariaId=&de=&ate=` | Extrato com saldo anterior, saldo após cada linha e saldo final |
+| GET | `/api/auditoria?usuarioId=&recurso=&recursoId=&de=&ate=&limite=&deslocamento=` | Trilha de auditoria da empresa, mais recente primeiro (`ADMIN`) |
 | GET | `/api/financeiro/fluxo-caixa?de=&ate=&agrupamento=mes\|dia` | Realizado e previsto por período, saldo acumulado e contas em atraso |
 | GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa` | Resultado por categoria, somado até as contas sintéticas |
 
@@ -140,6 +159,7 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria, cabeçalhos, CORS, limite por IP e segredo do JWT |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 

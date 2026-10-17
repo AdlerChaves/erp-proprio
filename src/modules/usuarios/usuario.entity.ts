@@ -26,6 +26,17 @@ export class Usuario {
   @Column({ default: true })
   ativo: boolean;
 
+  /** Incrementada ao trocar a senha ou encerrar as sessões: tokens com versão anterior deixam de valer. */
+  @Column({ name: 'token_versao', type: 'int', default: 1 })
+  tokenVersao: number;
+
+  /** Senhas erradas seguidas desde o último login bem-sucedido ou bloqueio. */
+  @Column({ name: 'tentativas_login', type: 'int', default: 0, select: false })
+  tentativasLogin: number;
+
+  @Column({ name: 'bloqueado_ate', type: 'timestamptz', nullable: true, select: false })
+  bloqueadoAte: Date | null;
+
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;
 

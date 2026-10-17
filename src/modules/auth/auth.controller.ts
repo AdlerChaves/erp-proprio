@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Ip, Patch, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Publico, SessaoAtual } from './auth.decorators';
 import { AuthService } from './auth.service';
@@ -8,22 +9,30 @@ import { RegistrarDto } from './dto/registrar.dto';
 import { TrocarEmpresaDto } from './dto/trocar-empresa.dto';
 import { Sessao } from './sessao';
 
+/** Login e cadastro aceitam poucas tentativas por minuto por IP (THROTTLE_LOGIN_LIMITE, padrão 10). */
+const LIMITE_ROTAS_PUBLICAS = {
+  limit: () => Number(process.env.THROTTLE_LOGIN_LIMITE ?? 10),
+  ttl: 60_000,
+};
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly service: AuthService) {}
 
   @Publico()
+  @Throttle({ default: LIMITE_ROTAS_PUBLICAS })
   @Post('registrar')
-  registrar(@Body() dto: RegistrarDto) {
-    return this.service.registrar(dto);
+  registrar(@Body() dto: RegistrarDto, @Ip() ip: string) {
+    return this.service.registrar(dto, ip);
   }
 
   @Publico()
+  @Throttle({ default: LIMITE_ROTAS_PUBLICAS })
   @Post('login')
   @HttpCode(200)
-  login(@Body() dto: LoginDto) {
-    return this.service.login(dto);
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
+    return this.service.login(dto, ip);
   }
 
   @ApiBearerAuth()
@@ -39,10 +48,19 @@ export class AuthController {
     return this.service.me(sessao);
   }
 
+  /** Os tokens emitidos antes deixam de valer; a resposta traz um token novo. */
   @ApiBearerAuth()
   @Patch('senha')
-  @HttpCode(204)
+  @HttpCode(200)
   alterarSenha(@SessaoAtual() sessao: Sessao, @Body() dto: AlterarSenhaDto) {
     return this.service.alterarSenha(sessao, dto);
+  }
+
+  /** Sai de todos os dispositivos: invalida todos os tokens do usuário, inclusive o atual. */
+  @ApiBearerAuth()
+  @Post('sessoes/encerrar')
+  @HttpCode(204)
+  encerrarSessoes(@SessaoAtual() sessao: Sessao) {
+    return this.service.encerrarSessoes(sessao);
   }
 }

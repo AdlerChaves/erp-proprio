@@ -15,7 +15,10 @@ import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
 import { PERFIS_KEY, PUBLICO_KEY } from './auth.decorators';
 import { Sessao, TokenPayload } from './sessao';
 
-/** Guard global: exige JWT válido, acesso ativo à empresa do token e, se houver, o perfil exigido. */
+/**
+ * Guard global: exige JWT válido e não revogado, acesso ativo à empresa do token
+ * e, se houver, o perfil exigido.
+ */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -51,13 +54,21 @@ export class AuthGuard implements CanActivate {
       relations: { usuario: true, empresa: true },
     });
     if (!vinculo) throw new UnauthorizedException('Acesso à empresa revogado');
+    if (vinculo.usuario.tokenVersao !== payload.ver) {
+      throw new UnauthorizedException('Sessão encerrada; faça login novamente');
+    }
 
     const perfis = this.reflector.getAllAndOverride<Perfil[] | undefined>(PERFIS_KEY, alvos);
     if (perfis?.length && !perfis.includes(vinculo.perfil)) {
       throw new ForbiddenException('Seu perfil não permite esta operação');
     }
 
-    req.sessao = { usuarioId: payload.sub, empresaId: payload.empresaId, perfil: vinculo.perfil };
+    req.sessao = {
+      usuarioId: payload.sub,
+      empresaId: payload.empresaId,
+      perfil: vinculo.perfil,
+      tokenVersao: vinculo.usuario.tokenVersao,
+    };
     return true;
   }
 }

@@ -71,7 +71,7 @@ export class MovimentacoesService {
     return this.repo.find({
       where,
       relations: { contaBancaria: true, planoConta: true, centroCusto: true },
-      order: { data: 'ASC', criadoEm: 'ASC', id: 'ASC' },
+      order: { data: 'ASC', seq: 'ASC' },
     });
   }
 

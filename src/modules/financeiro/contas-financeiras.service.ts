@@ -61,6 +61,8 @@ const CAMPOS_CLASSIFICACAO = ['planoContaId', 'centroCustoId'];
 
 const MAXIMO_PARCELAS = 120;
 
+const ORDEM_BAIXAS = { data: 'ASC', seq: 'ASC' } as const;
+
 /** Soma meses mantendo o dia, ou o último dia do mês quando ele não existe (31/01 + 1 mês = 28 ou 29/02). */
 export function somarMeses(data: string, meses: number) {
   const [ano, mes, dia] = data.split('-').map(Number);
@@ -124,13 +126,17 @@ export abstract class ContasFinanceirasService<T extends ContaFinanceira> {
     const contas = await this.repo.find({
       where: where as FindOptionsWhere<T>,
       relations: this.relacoes,
-      order: { dataVencimento: 'ASC', parcela: 'ASC' } as never,
+      order: { dataVencimento: 'ASC', parcela: 'ASC', baixas: ORDEM_BAIXAS } as never,
     });
     return contas.map((conta) => this.apresentar(conta));
   }
 
   async findOne(empresaId: string, id: string) {
-    const conta = await this.repo.findOne({ where: { id, empresaId } as FindOptionsWhere<T>, relations: this.relacoes });
+    const conta = await this.repo.findOne({
+      where: { id, empresaId } as FindOptionsWhere<T>,
+      relations: this.relacoes,
+      order: { baixas: ORDEM_BAIXAS } as never,
+    });
     if (!conta) throw new NotFoundException(`${this.config.nome} ${id} não encontrada`);
     return this.apresentar(conta);
   }
@@ -278,11 +284,9 @@ export abstract class ContasFinanceirasService<T extends ContaFinanceira> {
     return this.findOne(empresaId, id);
   }
 
-  /** Acrescenta o total baixado e o saldo em aberto, e ordena as baixas. */
+  /** Acrescenta o total baixado e o saldo em aberto. As baixas já vêm ordenadas por data e gravação. */
   private apresentar(conta: T) {
-    const baixas = [...(conta.baixas ?? [])].sort(
-      (a, b) => a.data.localeCompare(b.data) || a.criadoEm.getTime() - b.criadoEm.getTime(),
-    );
+    const baixas = (conta.baixas ?? []).map(({ seq: _, ...baixa }) => baixa);
     const baixado = baixas.reduce((soma, b) => soma + centavos(b.valor), 0);
     return { ...conta, baixas, valorBaixado: reais(baixado), saldo: reais(centavos(conta.valor) - baixado) };
   }
