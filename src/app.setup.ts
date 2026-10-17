@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ErroBancoFilter } from './common/erro-banco.filter';
 
@@ -23,6 +24,8 @@ export function configurarApp(app: INestApplication) {
   if (process.env.TRUST_PROXY) {
     app.getHttpAdapter().getInstance().set('trust proxy', confiarProxy(process.env.TRUST_PROXY));
   }
+
+  app.use(cookieParser());
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(

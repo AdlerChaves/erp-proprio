@@ -234,8 +234,8 @@ describe('Financeiro: baixas parciais, parcelamento, fluxo de caixa e DRE', () =
       const marco = await api(app, a.token).get('/financeiro/fluxo-caixa?de=2026-03-01&ate=2026-04-30').expect(200);
       expect(marco.body).toMatchObject({ saldoInicial: 1000, saldoFinal: 1090, agrupamento: 'mes' });
       expect(marco.body.periodos).toEqual([
-        { periodo: '2026-03', realizado: { entradas: 100, saidas: 10 }, previsto: { entradas: 0, saidas: 0 }, saldo: 1090 },
-        { periodo: '2026-04', realizado: { entradas: 0, saidas: 0 }, previsto: { entradas: 0, saidas: 0 }, saldo: 1090 },
+        { periodo: '2026-03', aberturas: 0, realizado: { entradas: 100, saidas: 10 }, previsto: { entradas: 0, saidas: 0 }, saldo: 1090 },
+        { periodo: '2026-04', aberturas: 0, realizado: { entradas: 0, saidas: 0 }, previsto: { entradas: 0, saidas: 0 }, saldo: 1090 },
       ]);
 
       const futuro = await api(app, a.token).get('/financeiro/fluxo-caixa?de=2099-01-01&ate=2099-02-28').expect(200);
@@ -247,7 +247,23 @@ describe('Financeiro: baixas parciais, parcelamento, fluxo de caixa e DRE', () =
       expect(futuro.body.totais.previsto).toEqual({ entradas: 700, saidas: 200 });
     });
 
-    it('agrupa por dia e informa contas em atraso', async () => {
+    it('conta bancária aberta dentro do período entra com o saldo inicial no mês da abertura', async () => {
+      await api(app, a.token)
+        .post('/contas-bancarias', { nome: 'Poupança', tipo: 'POUPANCA', banco: '001', agencia: '1', numero: '2', saldoInicial: 500, dataSaldoInicial: '2026-04-15' })
+        .expect(201);
+      await receber({ valor: 300, dataEmissao: '2026-04-01', dataVencimento: '2026-05-10' });
+
+      const { body } = await api(app, a.token).get('/financeiro/fluxo-caixa?de=2026-03-01&ate=2026-05-31').expect(200);
+      expect(body.saldoInicial).toBe(1000);
+      expect(body.periodos.map((p: { periodo: string; aberturas: number; saldo: number }) => [p.periodo, p.aberturas, p.saldo])).toEqual([
+        ['2026-03', 0, 1000],
+        ['2026-04', 500, 1500],
+        ['2026-05', 0, 1800],
+      ]);
+      expect(body.saldoFinal).toBe(1800);
+    });
+
+        it('agrupa por dia e informa contas em atraso', async () => {
       await receber({ valor: 80, dataEmissao: '2026-01-01', dataVencimento: '2026-02-01' });
       await pagar({ valor: 30, dataEmissao: '2026-01-01', dataVencimento: '2026-02-02' });
       const { body } = await api(app, a.token)

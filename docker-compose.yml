@@ -30,11 +30,21 @@ services:
       # Ambiente de desenvolvimento: mantém o Swagger em /docs. Desligue ao publicar.
       SWAGGER_HABILITADO: ${SWAGGER_HABILITADO:-true}
       CORS_ORIGENS: ${CORS_ORIGENS:-}
-    ports:
-      - "${PORT:-3000}:3000"
+      # Acesso local por http; em produção, com HTTPS, deixe o padrão (cookie só por conexão segura).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Atrás do nginx: necessário para o limite por IP e a auditoria verem o IP real.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    # Sem porta publicada: o acesso passa pelo nginx do serviço web, que repassa /api e /docs.
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build: ./web
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      - api
 
 volumes:
   pgdata:

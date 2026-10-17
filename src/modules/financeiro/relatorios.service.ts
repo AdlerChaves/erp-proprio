@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { hoje } from '../../common/datas';
 import { centavos, reais } from '../../common/dinheiro';
+import { ContasBancariasService } from '../contas-bancarias/contas-bancarias.service';
 import { MovimentacoesService } from '../movimentacoes/movimentacoes.service';
 import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
@@ -49,12 +50,14 @@ export class RelatoriosService {
     private readonly dataSource: DataSource,
     private readonly movimentacoes: MovimentacoesService,
     private readonly planoContas: PlanoContasService,
+    private readonly contasBancarias: ContasBancariasService,
   ) {}
 
   /**
    * Realizado: movimentações bancárias (sem transferências, que não mudam o caixa da empresa).
    * Previsto: saldo em aberto das contas pelo vencimento.
    * O saldo de cada período acumula os dois a partir do saldo bancário na véspera de "de".
+   * Contas bancárias abertas dentro do período entram com o saldo inicial no período da abertura (aberturas).
    */
   async fluxoCaixa(empresaId: string, filtro: FluxoCaixaDto) {
     const { de, ate } = filtro;
@@ -66,7 +69,7 @@ export class RelatoriosService {
     }
     const chave = (data: string) => (agrupamento === 'dia' ? data : data.slice(0, 7));
 
-    const [realizado, aReceber, aPagar, atrasoReceber, atrasoPagar, saldos] = await Promise.all([
+    const [realizado, aReceber, aPagar, atrasoReceber, atrasoPagar, saldos, contas] = await Promise.all([
       this.dataSource.query(
         `SELECT data::text AS data, tipo, SUM(valor) AS valor
            FROM movimentacoes_bancarias
@@ -79,14 +82,20 @@ export class RelatoriosService {
       this.dataSource.query(`${SQL_EM_ABERTO('contas_receber', 'conta_receber_id')} AND c.data_vencimento < $2`, [empresaId, hoje()]) as Promise<Linha[]>,
       this.dataSource.query(`${SQL_EM_ABERTO('contas_pagar', 'conta_pagar_id')} AND c.data_vencimento < $2`, [empresaId, hoje()]) as Promise<Linha[]>,
       this.movimentacoes.saldos(empresaId, diaAnterior(de)),
+      this.contasBancarias.findAll(empresaId),
     ]);
 
-    const zerado = () => ({ realizadoEntradas: 0, realizadoSaidas: 0, previstoEntradas: 0, previstoSaidas: 0 });
+    const zerado = () => ({ aberturas: 0, realizadoEntradas: 0, realizadoSaidas: 0, previstoEntradas: 0, previstoSaidas: 0 });
     const porPeriodo = new Map(chaves.map((c) => [c, zerado()]));
     for (const r of realizado) {
       const p = porPeriodo.get(chave(r.data))!;
       if (r.tipo === 'ENTRADA') p.realizadoEntradas += centavos(r.valor);
       else p.realizadoSaidas += centavos(r.valor);
+    }
+    for (const conta of contas) {
+      if (conta.dataSaldoInicial >= de && conta.dataSaldoInicial <= ate) {
+        porPeriodo.get(chave(conta.dataSaldoInicial))!.aberturas += centavos(conta.saldoInicial);
+      }
     }
     for (const r of aReceber) porPeriodo.get(chave(r.data))!.previstoEntradas += centavos(r.valor);
     for (const r of aPagar) porPeriodo.get(chave(r.data))!.previstoSaidas += centavos(r.valor);
@@ -96,10 +105,12 @@ export class RelatoriosService {
     const totais = zerado();
     const linhas = chaves.map((periodo) => {
       const p = porPeriodo.get(periodo)!;
-      saldo += p.realizadoEntradas - p.realizadoSaidas + p.previstoEntradas - p.previstoSaidas;
+      saldo += p.aberturas + p.realizadoEntradas - p.realizadoSaidas + p.previstoEntradas - p.previstoSaidas;
       for (const k of Object.keys(totais) as (keyof typeof totais)[]) totais[k] += p[k];
       return {
         periodo,
+        /** Saldo inicial de contas bancárias abertas neste período. */
+        aberturas: reais(p.aberturas),
         realizado: { entradas: reais(p.realizadoEntradas), saidas: reais(p.realizadoSaidas) },
         previsto: { entradas: reais(p.previstoEntradas), saidas: reais(p.previstoSaidas) },
         saldo: reais(saldo),

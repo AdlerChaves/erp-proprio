@@ -4,6 +4,13 @@
 
 API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias), **Contas a Receber** e **Contas a Pagar** com baixas parciais e parcelamento, **movimentação bancária** com saldo e extrato, **fluxo de caixa** e **DRE**.
 
+## Estrutura
+
+| Pasta | Conteúdo |
+|---|---|
+| `src/`, `test/` | API NestJS e testes e2e |
+| `web/` | Frontend React + Vite + Mantine |
+
 ## Rodando com Docker
 
 ```bash
@@ -11,34 +18,35 @@ cp .env.example .env   # e troque o JWT_SECRET (openssl rand -hex 32); a API nã
 docker compose up --build
 ```
 
-A API sobe em `http://localhost:3000/api`, com o Swagger em `http://localhost:3000/docs`.
-As migrations rodam automaticamente na subida do container.
+Abra **http://localhost:8080**. O nginx do serviço `web` serve as telas e repassa `/api` e `/docs` (Swagger) para a API, tudo na mesma origem. A API não fica exposta diretamente, e as migrations rodam na subida do container.
 
-## Rodando localmente
+## Desenvolvimento local
 
 ```bash
 npm install
 docker compose up -d db
 npm run migration:run
-npm run start:dev
+npm run start:dev          # API em http://localhost:3000 (Swagger em /docs)
+
+cd web
+npm install
+npm run dev                # frontend em http://localhost:5173, com /api repassado para a API
 ```
 
-## Autenticação e multiempresa
+## Frontend
 
-- `POST /api/auth/registrar` cria a empresa e o usuário administrador e devolve o token.
-- Todas as rotas, exceto `registrar`, `login` e `health`, exigem `Authorization: Bearer <token>`.
-- O token identifica **usuário + empresa**. Todos os dados (clientes, contas) são filtrados pela empresa do token; o `empresaId` nunca vem do corpo da requisição.
-- Um usuário pode ter acesso a várias empresas, com um perfil em cada. No login, quem tem mais de uma empresa precisa informar `empresaId`; depois pode trocar com `POST /api/auth/trocar-empresa`.
-- O perfil e o bloqueio de acesso são conferidos no banco a cada requisição, então valem na hora, sem novo login.
+React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
-| Perfil | Pode |
-|---|---|
-| `ADMIN` | Tudo, incluindo usuários, dados da empresa e remoção de qualquer cadastro |
-| `FINANCEIRO` | Criar e alterar todos os cadastros, contas a receber e a pagar, e movimentações bancárias |
-| `VENDAS` | Criar e alterar clientes e produtos; não vê saldos, extratos nem relatórios financeiros |
-| `CONSULTA` | Só leitura, incluindo saldos, extratos, fluxo de caixa e DRE |
+- Telas: login, cadastro da empresa, escolha e troca de empresa, painel (saldos, fluxo de caixa de 6 meses, contas em atraso), contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento), clientes, fornecedores e contas bancárias.
+- Os botões aparecem conforme o perfil; quem decide de fato é a API.
+- Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
+- `npm run typecheck`, `npm test` (Vitest) e `npm run build` dentro de `web/`.
 
-A empresa sempre mantém pelo menos um `ADMIN` ativo.
+### Sessão no navegador
+
+O frontend envia `X-Sessao: cookie` no login. A API então entrega o token num cookie `httpOnly` (`SameSite=Lax`, `Path=/api`), que nenhum script da página consegue ler, e devolve só um `csrfToken`. Toda escrita autenticada por cookie precisa repetir esse valor no cabeçalho `X-CSRF-Token`; ele também vem em `GET /api/auth/me`. Clientes de API (Swagger, integrações) continuam recebendo o token no corpo e usando `Authorization: Bearer`, sem CSRF. `COOKIE_SECURE` (padrão: ligado em produção) restringe o cookie a HTTPS.
+
+O nginx envia uma Content-Security-Policy restritiva (`web/nginx/seguranca.conf`): scripts só da própria origem, sem frames e sem chamadas a outros domínios.
 
 ## Segurança
 
@@ -47,6 +55,7 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | Limite de requisições | Por IP e por minuto: `THROTTLE_LIMITE` (padrão 300) em geral e `THROTTLE_LOGIN_LIMITE` (padrão 10) em login e cadastro. Vale antes da autenticação; acima do limite, a API responde 429. |
 | Bloqueio de conta | 5 senhas erradas seguidas bloqueiam a conta por 15 minutos, mesmo para a senha certa. E-mail inexistente, senha errada e conta bloqueada recebem a mesma resposta. |
 | Revogação de tokens | Trocar a senha ou chamar `POST /api/auth/sessoes/encerrar` invalida todos os tokens já emitidos. Perfil e bloqueio de acesso também valem na hora. |
+| Sessão do navegador | Cookie `httpOnly` com token CSRF obrigatório nas escritas (detalhes em Frontend). |
 | Senhas | Entre 8 e 72 caracteres, fora de uma lista de senhas muito comuns; guardadas com scrypt. |
 | Auditoria | Toda escrita autenticada bem-sucedida é registrada com usuário, empresa, rota, id e corpo (senhas e tokens viram `***`), além de cadastro, login, falhas e bloqueios. Consulta em `GET /api/auditoria` (só `ADMIN`). |
 | Cabeçalhos HTTP | `helmet` (HSTS, `nosniff`, proteção contra frames, sem `X-Powered-By`). |
@@ -68,6 +77,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET | `/api/auth/me` | Usuário logado, perfil e empresas acessíveis |
 | PATCH | `/api/auth/senha` | Altera a própria senha; invalida os tokens anteriores e devolve um novo |
 | POST | `/api/auth/sessoes/encerrar` | Sai de todos os dispositivos (invalida todos os tokens do usuário) |
+| POST | `/api/auth/logout` | Sai deste navegador (apaga o cookie de sessão) |
 | GET/PATCH | `/api/empresas/atual` | Consulta / altera a empresa atual (alterar: `ADMIN`) |
 | POST | `/api/empresas` | Cria outra empresa com o usuário logado como `ADMIN` |
 | GET/POST | `/api/usuarios` | Lista / dá acesso a usuários da empresa (`ADMIN`) |
@@ -135,7 +145,7 @@ Movimentação bancária:
 
 Relatórios:
 
-- **Fluxo de caixa**: realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
+- **Fluxo de caixa**: contas bancárias abertas dentro do período entram com o saldo inicial no período da abertura (`aberturas`). Realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
 - **DRE**: por competência, contas não canceladas pela data de emissão e pelo valor original; por caixa, baixas pela data e pelo valor pago. Nos dois regimes entram as movimentações avulsas com categoria. Valores sem categoria aparecem em `semCategoria`.
 - Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
@@ -159,6 +169,7 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/sessao-cookie.e2e-spec.ts` | Sessão em cookie httpOnly, CSRF nas escritas, troca de empresa, senha e logout |
 | `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria, cabeçalhos, CORS, limite por IP e segredo do JWT |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).

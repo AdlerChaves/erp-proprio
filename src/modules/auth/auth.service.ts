@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomBytes } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { Empresa } from '../empresas/empresa.entity';
@@ -127,6 +128,7 @@ export class AuthService {
       empresaId: sessao.empresaId,
       perfil: sessao.perfil,
       empresas: await this.empresasDoUsuario(sessao.usuarioId),
+      csrfToken: sessao.csrfToken,
     };
   }
 
@@ -185,8 +187,10 @@ export class AuthService {
     }));
   }
 
+  /** Cada token leva seu próprio token CSRF, conferido nas escritas feitas por cookie. */
   private async emitirToken(usuarioId: string, empresaId: string, tokenVersao: number) {
-    const payload: TokenPayload = { sub: usuarioId, empresaId, ver: tokenVersao };
-    return { accessToken: await this.jwt.signAsync(payload), empresaId };
+    const csrf = randomBytes(24).toString('base64url');
+    const payload: TokenPayload = { sub: usuarioId, empresaId, ver: tokenVersao, csrf };
+    return { accessToken: await this.jwt.signAsync(payload), empresaId, csrfToken: csrf };
   }
 }

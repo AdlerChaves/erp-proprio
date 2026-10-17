@@ -6,6 +6,8 @@ export interface TokenPayload {
   empresaId: string;
   /** Versão de token do usuário quando o token foi emitido; se ela mudou, o token não vale mais. */
   ver: number;
+  /** Exigido no cabeçalho X-CSRF-Token nas escritas autenticadas por cookie. */
+  csrf: string;
 }
 
 export interface Sessao {
@@ -13,4 +15,5 @@ export interface Sessao {
   empresaId: string;
   perfil: Perfil;
   tokenVersao: number;
+  csrfToken: string;
 }
