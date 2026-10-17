@@ -66,10 +66,10 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | GET/PATCH/DELETE | `/api/centros-custo/:id` | Consulta / altera / remove centro de custo |
 | GET/POST | `/api/contas-bancarias` | Lista / cria contas bancárias e caixas |
 | GET/PATCH/DELETE | `/api/contas-bancarias/:id` | Consulta / altera / remove conta bancária |
-| GET | `/api/contas-receber?clienteId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
-| POST | `/api/contas-receber` | Cria conta (status `ABERTA`) |
-| GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (só se `ABERTA`) |
-| POST | `/api/contas-receber/:id/baixa` | Registra pagamento (`PAGA`) |
+| GET | `/api/contas-receber?clienteId=&planoContaId=&centroCustoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
+| POST | `/api/contas-receber` | Cria conta (status `ABERTA`), com categoria e centro de custo opcionais |
+| GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (paga ou cancelada: só categoria e centro de custo) |
+| POST | `/api/contas-receber/:id/baixa` | Registra pagamento (`PAGA`) na conta bancária informada em `contaBancariaId` |
 | POST | `/api/contas-receber/:id/cancelamento` | Cancela (`CANCELADA`) |
 
 Regras dos cadastros:
@@ -78,6 +78,12 @@ Regras dos cadastros:
 - Produtos levam NCM; serviços levam o item da LC 116 (`00.00`). Um não aceita o campo do outro.
 - Plano de contas em árvore: a subconta tem o mesmo tipo (receita ou despesa) da conta pai e código prefixado por ela (`1` → `1.01`). Só contas sintéticas (`aceitaLancamento: false`) têm subcontas; tipo e conta pai não mudam depois de criados.
 - Contas bancárias exigem banco, agência e número, exceto o tipo `CAIXA`.
+- Toda empresa nova recebe um plano de contas padrão (raiz `1` Receitas e `2` Despesas, com cerca de 30 contas), que pode ser editado e ampliado.
+
+Contas a receber:
+
+- A categoria (`planoContaId`) é opcional e precisa ser uma conta de receita analítica e ativa. O centro de custo também é opcional e precisa estar ativo. Os dois podem ser definidos ou trocados depois, inclusive em contas pagas ou canceladas; envie `null` para remover.
+- A baixa exige `contaBancariaId` (conta ativa da empresa). `valorPago` e `dataPagamento` são opcionais e assumem o valor da conta e a data de hoje.
 - Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
 ## Testes
@@ -96,6 +102,7 @@ npm run test:e2e
 | `test/perfis.e2e-spec.ts` | Matriz de permissões por perfil, bloqueio e regra do último administrador |
 | `test/multiempresa.e2e-spec.ts` | Usuário em várias empresas: login, troca e criação de empresa |
 | `test/cadastros.e2e-spec.ts` | CRUD, isolamento e permissões de cada cadastro, e as regras específicas de cada um |
+| `test/contas-receber.e2e-spec.ts` | Plano de contas padrão, categoria e centro de custo, baixa com conta bancária, datas e estados da conta |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 

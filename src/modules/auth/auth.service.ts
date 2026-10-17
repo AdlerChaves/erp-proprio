@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Empresa } from '../empresas/empresa.entity';
+import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
 import { Usuario } from '../usuarios/usuario.entity';
@@ -38,6 +39,7 @@ export class AuthService {
         throw new ConflictException(`Já existe empresa com CNPJ ${dto.empresa.cnpj}`);
       }
       const empresa = await m.save(m.create(Empresa, dto.empresa));
+      await criarPlanoPadrao(m, empresa.id);
       const usuario = await m.save(
         m.create(Usuario, {
           nome: dto.usuario.nome,

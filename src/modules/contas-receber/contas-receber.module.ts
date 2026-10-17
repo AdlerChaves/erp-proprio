@@ -1,12 +1,21 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CentrosCustoModule } from '../centros-custo/centros-custo.module';
 import { ClientesModule } from '../clientes/clientes.module';
+import { ContasBancariasModule } from '../contas-bancarias/contas-bancarias.module';
+import { PlanoContasModule } from '../plano-contas/plano-contas.module';
 import { ContaReceber } from './conta-receber.entity';
 import { ContasReceberController } from './contas-receber.controller';
 import { ContasReceberService } from './contas-receber.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ContaReceber]), ClientesModule],
+  imports: [
+    TypeOrmModule.forFeature([ContaReceber]),
+    ClientesModule,
+    PlanoContasModule,
+    CentrosCustoModule,
+    ContasBancariasModule,
+  ],
   controllers: [ContasReceberController],
   providers: [ContasReceberService],
 })

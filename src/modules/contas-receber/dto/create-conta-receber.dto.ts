@@ -19,4 +19,14 @@ export class CreateContaReceberDto {
 
   @IsDateString({ strict: true })
   dataVencimento: string;
+
+  /** Categoria de receita analítica e ativa. Envie null na alteração para remover. */
+  @IsOptional()
+  @IsUUID()
+  planoContaId?: string | null;
+
+  /** Envie null na alteração para remover. */
+  @IsOptional()
+  @IsUUID()
+  centroCustoId?: string | null;
 }

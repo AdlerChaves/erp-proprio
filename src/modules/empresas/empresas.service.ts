@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
 import { CreateEmpresaDto } from './dto/create-empresa.dto';
@@ -25,13 +26,14 @@ export class EmpresasService {
     return this.repo.save(this.repo.merge(empresa, dto));
   }
 
-  /** Cria a empresa e torna o usuário seu administrador. */
+  /** Cria a empresa com o plano de contas padrão e torna o usuário seu administrador. */
   criarParaUsuario(usuarioId: string, dto: CreateEmpresaDto) {
     return this.dataSource.transaction(async (m) => {
       if (await m.existsBy(Empresa, { cnpj: dto.cnpj })) {
         throw new ConflictException(`Já existe empresa com CNPJ ${dto.cnpj}`);
       }
       const empresa = await m.save(m.create(Empresa, dto));
+      await criarPlanoPadrao(m, empresa.id);
       await m.save(m.create(UsuarioEmpresa, { usuarioId, empresaId: empresa.id, perfil: Perfil.ADMIN }));
       return empresa;
     });

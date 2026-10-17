@@ -44,7 +44,7 @@ describe('Cadastros', () => {
     },
     {
       rota: '/plano-contas',
-      criar: () => ({ codigo: String(++seq), nome: 'Receitas', tipo: 'RECEITA' }),
+      criar: () => ({ codigo: `9${++seq}`, nome: 'Receitas', tipo: 'RECEITA' }),
       alterar: { nome: 'Alterado' },
       escrita: [Perfil.ADMIN, Perfil.FINANCEIRO],
     },
@@ -69,7 +69,7 @@ describe('Cadastros', () => {
       const id = criado.body.id;
 
       const lista = await api(app, a.token).get(r.rota).expect(200);
-      expect(lista.body.map((x: { id: string }) => x.id)).toEqual([id]);
+      expect(lista.body.map((x: { id: string }) => x.id)).toContain(id);
 
       await api(app, a.token).get(`${r.rota}/${id}`).expect(200);
       const alterado = await api(app, a.token).patch(`${r.rota}/${id}`, r.alterar).expect(200);
@@ -82,7 +82,8 @@ describe('Cadastros', () => {
     it('é isolado entre empresas', async () => {
       const { body } = await api(app, a.token).post(r.rota, r.criar()).expect(201);
 
-      await api(app, b.token).get(r.rota).expect(200, []);
+      const listaB = await api(app, b.token).get(r.rota).expect(200);
+      expect(listaB.body.map((x: { id: string }) => x.id)).not.toContain(body.id);
       await api(app, b.token).get(`${r.rota}/${body.id}`).expect(404);
       await api(app, b.token).patch(`${r.rota}/${body.id}`, r.alterar).expect(404);
       await api(app, b.token).delete(`${r.rota}/${body.id}`).expect(404);
@@ -164,49 +165,54 @@ describe('Cadastros', () => {
   describe('plano de contas', () => {
     const criar = (token: string, dados: object) => api(app, token).post('/plano-contas', dados);
 
-    /** Cria a conta sintética "1 Receitas" e devolve o id. */
+    // As raízes 7 (receita) e 8 (despesa) não existem no plano padrão, que usa 1 e 2.
+
+    /** Cria a conta sintética "7 Receitas" e devolve o id. */
     const criarGrupoReceitas = async () =>
-      (await criar(a.token, { codigo: '1', nome: 'Receitas', tipo: 'RECEITA', aceitaLancamento: false }).expect(201)).body
+      (await criar(a.token, { codigo: '7', nome: 'Receitas', tipo: 'RECEITA', aceitaLancamento: false }).expect(201)).body
         .id as string;
 
     it('monta a árvore e lista em ordem de código', async () => {
       const raiz = await criarGrupoReceitas();
-      await criar(a.token, { codigo: '1.02', nome: 'Serviços', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
-      await criar(a.token, { codigo: '1.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
-      await criar(a.token, { codigo: '2', nome: 'Despesas', tipo: 'DESPESA' }).expect(201);
+      await criar(a.token, { codigo: '7.02', nome: 'Serviços', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
+      await criar(a.token, { codigo: '7.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
+      await criar(a.token, { codigo: '8', nome: 'Despesas', tipo: 'DESPESA' }).expect(201);
 
       const todas = await api(app, a.token).get('/plano-contas').expect(200);
-      expect(todas.body.map((c: { codigo: string }) => c.codigo)).toEqual(['1', '1.01', '1.02', '2']);
-      expect(todas.body[1].contaPaiId).toBe(raiz);
+      const codigos = todas.body.map((c: { codigo: string }) => c.codigo);
+      expect(codigos.filter((c: string) => /^[78]/.test(c))).toEqual(['7', '7.01', '7.02', '8']);
+      expect(codigos).toEqual([...codigos].sort());
+      expect(todas.body.find((c: { codigo: string }) => c.codigo === '7.01').contaPaiId).toBe(raiz);
 
       const despesas = await api(app, a.token).get('/plano-contas?tipo=DESPESA').expect(200);
-      expect(despesas.body.map((c: { codigo: string }) => c.codigo)).toEqual(['2']);
+      expect(despesas.body.every((c: { tipo: string }) => c.tipo === 'DESPESA')).toBe(true);
+      expect(despesas.body.map((c: { codigo: string }) => c.codigo)).toContain('8');
     });
 
     it('não cria subconta embaixo de conta analítica', async () => {
-      const { body } = await criar(a.token, { codigo: '1', nome: 'Receitas', tipo: 'RECEITA' }).expect(201);
-      await criar(a.token, { codigo: '1.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: body.id }).expect(400);
+      const { body } = await criar(a.token, { codigo: '7', nome: 'Receitas', tipo: 'RECEITA' }).expect(201);
+      await criar(a.token, { codigo: '7.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: body.id }).expect(400);
     });
 
     it('exige o mesmo tipo e o código prefixado pela conta pai', async () => {
       const raiz = await criarGrupoReceitas();
-      await criar(a.token, { codigo: '1.01', nome: 'X', tipo: 'DESPESA', contaPaiId: raiz }).expect(400);
-      await criar(a.token, { codigo: '2.01', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(400);
-      await criar(a.token, { codigo: '11', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(400);
+      await criar(a.token, { codigo: '7.01', nome: 'X', tipo: 'DESPESA', contaPaiId: raiz }).expect(400);
+      await criar(a.token, { codigo: '8.01', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(400);
+      await criar(a.token, { codigo: '77', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(400);
     });
 
     it('não aceita conta pai de outra empresa', async () => {
       const raiz = await criarGrupoReceitas();
-      await criar(b.token, { codigo: '1.01', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(404);
+      await criar(b.token, { codigo: '7.01', nome: 'X', tipo: 'RECEITA', contaPaiId: raiz }).expect(404);
     });
 
     it('protege contas que têm subcontas', async () => {
       const raiz = await criarGrupoReceitas();
-      const filha = await criar(a.token, { codigo: '1.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
+      const filha = await criar(a.token, { codigo: '7.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
 
       await api(app, a.token).delete(`/plano-contas/${raiz}`).expect(409);
       await api(app, a.token).patch(`/plano-contas/${raiz}`, { aceitaLancamento: true }).expect(400);
-      await api(app, a.token).patch(`/plano-contas/${raiz}`, { codigo: '9' }).expect(400);
+      await api(app, a.token).patch(`/plano-contas/${raiz}`, { codigo: '6' }).expect(400);
 
       await api(app, a.token).delete(`/plano-contas/${filha.body.id}`).expect(204);
       await api(app, a.token).delete(`/plano-contas/${raiz}`).expect(204);
@@ -214,9 +220,9 @@ describe('Cadastros', () => {
 
     it('mantém o prefixo ao mudar o código de uma subconta', async () => {
       const raiz = await criarGrupoReceitas();
-      const { body } = await criar(a.token, { codigo: '1.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
-      await api(app, a.token).patch(`/plano-contas/${body.id}`, { codigo: '2.01' }).expect(400);
-      await api(app, a.token).patch(`/plano-contas/${body.id}`, { codigo: '1.05' }).expect(200);
+      const { body } = await criar(a.token, { codigo: '7.01', nome: 'Vendas', tipo: 'RECEITA', contaPaiId: raiz }).expect(201);
+      await api(app, a.token).patch(`/plano-contas/${body.id}`, { codigo: '8.01' }).expect(400);
+      await api(app, a.token).patch(`/plano-contas/${body.id}`, { codigo: '7.05' }).expect(200);
     });
 
     it('não permite mudar tipo nem conta pai depois de criada', async () => {
@@ -227,8 +233,8 @@ describe('Cadastros', () => {
 
     it('recusa código repetido e formato inválido', async () => {
       await criarGrupoReceitas();
-      await criar(a.token, { codigo: '1', nome: 'Outra', tipo: 'DESPESA' }).expect(409);
-      await criar(a.token, { codigo: '1.a', nome: 'X', tipo: 'DESPESA' }).expect(400);
+      await criar(a.token, { codigo: '7', nome: 'Outra', tipo: 'DESPESA' }).expect(409);
+      await criar(a.token, { codigo: '7.a', nome: 'X', tipo: 'DESPESA' }).expect(400);
     });
   });
 

@@ -7,6 +7,14 @@ export class FiltroContaReceberDto {
   clienteId?: string;
 
   @IsOptional()
+  @IsUUID()
+  planoContaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  centroCustoId?: string;
+
+  @IsOptional()
   @IsEnum(StatusContaReceber)
   status?: StatusContaReceber;
 

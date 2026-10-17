@@ -84,3 +84,12 @@ export async function criarConta(app: INestApplication, token: string, clienteId
     .expect(201);
   return res.body as { id: string };
 }
+
+let contaBancaria = 0;
+
+export async function criarContaBancaria(app: INestApplication, token: string) {
+  const res = await api(app, token)
+    .post('/contas-bancarias', { nome: `Caixa ${++contaBancaria}`, tipo: 'CAIXA', saldoInicial: 0 })
+    .expect(201);
+  return res.body as { id: string };
+}

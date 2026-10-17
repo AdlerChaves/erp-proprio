@@ -1,6 +1,17 @@
 import { INestApplication } from '@nestjs/common';
 import { Perfil } from '../src/modules/usuarios/perfil.enum';
-import { Acesso, adicionarUsuario, api, criarApp, criarCliente, criarConta, limparBanco, registrarEmpresa, SENHA } from './helpers';
+import {
+  Acesso,
+  adicionarUsuario,
+  api,
+  criarApp,
+  criarCliente,
+  criarConta,
+  criarContaBancaria,
+  limparBanco,
+  registrarEmpresa,
+  SENHA,
+} from './helpers';
 
 describe('Perfis e gestão de usuários', () => {
   let app: INestApplication;
@@ -16,7 +27,7 @@ describe('Perfis e gestão de usuários', () => {
   afterAll(() => app.close());
 
   describe('permissões por perfil', () => {
-    type Ctx = { clienteId: string; contaId: string };
+    type Ctx = { clienteId: string; contaId: string; contaBancariaId: string };
     type Operacao = [descricao: string, executar: (token: string, ctx: Ctx) => ReturnType<ReturnType<typeof api>['get']>];
 
     const operacoes: Record<string, Operacao> = {
@@ -28,7 +39,10 @@ describe('Perfis e gestão de usuários', () => {
         'criar conta',
         (t, c) => api(app, t).post('/contas-receber', { clienteId: c.clienteId, descricao: 'X', valor: 1, dataVencimento: '2099-01-01' }),
       ],
-      baixarConta: ['baixar conta', (t, c) => api(app, t).post(`/contas-receber/${c.contaId}/baixa`)],
+      baixarConta: [
+        'baixar conta',
+        (t, c) => api(app, t).post(`/contas-receber/${c.contaId}/baixa`, { contaBancariaId: c.contaBancariaId }),
+      ],
       listarUsuarios: ['listar usuários', (t) => api(app, t).get('/usuarios')],
       alterarEmpresa: ['alterar empresa', (t) => api(app, t).patch('/empresas/atual', { nomeFantasia: 'Novo nome' })],
     };
@@ -61,8 +75,12 @@ describe('Perfis e gestão de usuários', () => {
 
     beforeEach(async () => {
       const cliente = await criarCliente(app, admin.token);
-      ctx = { clienteId: cliente.id, contaId: (await criarConta(app, admin.token, cliente.id)).id };
-      ctxSemContas = { clienteId: (await criarCliente(app, admin.token)).id, contaId: '' };
+      ctx = {
+        clienteId: cliente.id,
+        contaId: (await criarConta(app, admin.token, cliente.id)).id,
+        contaBancariaId: (await criarContaBancaria(app, admin.token)).id,
+      };
+      ctxSemContas = { clienteId: (await criarCliente(app, admin.token)).id, contaId: '', contaBancariaId: '' };
     });
 
     it.each(matriz)('%s → %s responde %i', async (perfil, operacao, status) => {
