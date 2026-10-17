@@ -1,5 +1,7 @@
 # ERP Próprio — API
 
+[![CI](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml)
+
 API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias) e **Contas a Receber**.
 
 ## Rodando com Docker
@@ -94,6 +96,8 @@ npm run test:e2e
 | `test/perfis.e2e-spec.ts` | Matriz de permissões por perfil, bloqueio e regra do último administrador |
 | `test/multiempresa.e2e-spec.ts` | Usuário em várias empresas: login, troca e criação de empresa |
 | `test/cadastros.e2e-spec.ts` | CRUD, isolamento e permissões de cada cadastro, e as regras específicas de cada um |
+
+A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 
 ## Migrations
 
