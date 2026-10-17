@@ -1,6 +1,6 @@
 # ERP Próprio — API
 
-API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa e os módulos **Clientes** e **Contas a Receber**.
+API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias) e **Contas a Receber**.
 
 ## Rodando com Docker
 
@@ -31,9 +31,9 @@ npm run start:dev
 
 | Perfil | Pode |
 |---|---|
-| `ADMIN` | Tudo, incluindo usuários, dados da empresa e remoção de clientes |
-| `FINANCEIRO` | Clientes (criar e alterar) e contas a receber |
-| `VENDAS` | Clientes (criar e alterar) |
+| `ADMIN` | Tudo, incluindo usuários, dados da empresa e remoção de qualquer cadastro |
+| `FINANCEIRO` | Criar e alterar todos os cadastros e contas a receber |
+| `VENDAS` | Criar e alterar clientes e produtos |
 | `CONSULTA` | Só leitura |
 
 A empresa sempre mantém pelo menos um `ADMIN` ativo.
@@ -54,13 +54,29 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | PATCH | `/api/usuarios/:id` | Altera perfil ou bloqueia o acesso (`ADMIN`) |
 | GET/POST | `/api/clientes` | Lista / cria clientes |
 | GET/PATCH/DELETE | `/api/clientes/:id` | Consulta / altera / remove cliente |
+| GET/POST | `/api/fornecedores` | Lista / cria fornecedores |
+| GET/PATCH/DELETE | `/api/fornecedores/:id` | Consulta / altera / remove fornecedor |
+| GET/POST | `/api/produtos?tipo=` | Lista / cria produtos e serviços |
+| GET/PATCH/DELETE | `/api/produtos/:id` | Consulta / altera / remove produto ou serviço |
+| GET/POST | `/api/plano-contas?tipo=` | Lista (em ordem de código) / cria contas do plano |
+| GET/PATCH/DELETE | `/api/plano-contas/:id` | Consulta / altera / remove conta do plano |
+| GET/POST | `/api/centros-custo` | Lista / cria centros de custo |
+| GET/PATCH/DELETE | `/api/centros-custo/:id` | Consulta / altera / remove centro de custo |
+| GET/POST | `/api/contas-bancarias` | Lista / cria contas bancárias e caixas |
+| GET/PATCH/DELETE | `/api/contas-bancarias/:id` | Consulta / altera / remove conta bancária |
 | GET | `/api/contas-receber?clienteId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
 | POST | `/api/contas-receber` | Cria conta (status `ABERTA`) |
 | GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (só se `ABERTA`) |
 | POST | `/api/contas-receber/:id/baixa` | Registra pagamento (`PAGA`) |
 | POST | `/api/contas-receber/:id/cancelamento` | Cancela (`CANCELADA`) |
 
-O documento do cliente é único dentro da empresa. Um cliente com contas a receber não pode ser removido (FK `RESTRICT`).
+Regras dos cadastros:
+
+- Documento (clientes e fornecedores), código (produtos e plano de contas) e nome (centros de custo e contas bancárias) são únicos dentro da empresa.
+- Produtos levam NCM; serviços levam o item da LC 116 (`00.00`). Um não aceita o campo do outro.
+- Plano de contas em árvore: a subconta tem o mesmo tipo (receita ou despesa) da conta pai e código prefixado por ela (`1` → `1.01`). Só contas sintéticas (`aceitaLancamento: false`) têm subcontas; tipo e conta pai não mudam depois de criados.
+- Contas bancárias exigem banco, agência e número, exceto o tipo `CAIXA`.
+- Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
 ## Testes
 
@@ -77,6 +93,7 @@ npm run test:e2e
 | `test/isolamento.e2e-spec.ts` | Uma empresa não lê nem altera dados de outra |
 | `test/perfis.e2e-spec.ts` | Matriz de permissões por perfil, bloqueio e regra do último administrador |
 | `test/multiempresa.e2e-spec.ts` | Usuário em várias empresas: login, troca e criação de empresa |
+| `test/cadastros.e2e-spec.ts` | CRUD, isolamento e permissões de cada cadastro, e as regras específicas de cada um |
 
 ## Migrations
 
