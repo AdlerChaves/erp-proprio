@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { CreatePlanoContaDto } from './dto/create-plano-conta.dto';
 import { FiltroPlanoContaDto } from './dto/filtro-plano-conta.dto';
 import { UpdatePlanoContaDto } from './dto/update-plano-conta.dto';
-import { PlanoConta } from './plano-conta.entity';
+import { PlanoConta, TipoPlanoConta } from './plano-conta.entity';
 
 @Injectable()
 export class PlanoContasService {
@@ -18,6 +18,19 @@ export class PlanoContasService {
   async findOne(empresaId: string, id: string) {
     const conta = await this.repo.findOneBy({ id, empresaId });
     if (!conta) throw new NotFoundException(`Conta ${id} do plano de contas não encontrada`);
+    return conta;
+  }
+
+  /** Conta analítica e ativa do tipo pedido, apta a receber lançamentos. */
+  async findParaLancamento(empresaId: string, id: string, tipo: TipoPlanoConta) {
+    const conta = await this.findOne(empresaId, id);
+    if (conta.tipo !== tipo) {
+      throw new BadRequestException(`A categoria ${conta.codigo} não é de ${tipo === TipoPlanoConta.RECEITA ? 'receita' : 'despesa'}`);
+    }
+    if (!conta.aceitaLancamento) {
+      throw new BadRequestException(`A categoria ${conta.codigo} é sintética; escolha uma subconta`);
+    }
+    if (!conta.ativo) throw new BadRequestException(`A categoria ${conta.codigo} está inativa`);
     return conta;
   }
 

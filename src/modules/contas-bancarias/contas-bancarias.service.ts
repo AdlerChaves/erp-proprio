@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
+import { MovimentacaoBancaria } from '../movimentacoes/movimentacao-bancaria.entity';
 import { ContaBancaria, TipoContaBancaria } from './conta-bancaria.entity';
 import { CreateContaBancariaDto } from './dto/create-conta-bancaria.dto';
 import { UpdateContaBancariaDto } from './dto/update-conta-bancaria.dto';
@@ -9,7 +10,10 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 @Injectable()
 export class ContasBancariasService {
-  constructor(@InjectRepository(ContaBancaria) private readonly repo: Repository<ContaBancaria>) {}
+  constructor(
+    @InjectRepository(ContaBancaria) private readonly repo: Repository<ContaBancaria>,
+    @InjectRepository(MovimentacaoBancaria) private readonly movimentacoes: Repository<MovimentacaoBancaria>,
+  ) {}
 
   findAll(empresaId: string) {
     return this.repo.find({ where: { empresaId }, order: { nome: 'ASC' } });
@@ -18,6 +22,12 @@ export class ContasBancariasService {
   async findOne(empresaId: string, id: string) {
     const conta = await this.repo.findOneBy({ id, empresaId });
     if (!conta) throw new NotFoundException(`Conta bancária ${id} não encontrada`);
+    return conta;
+  }
+
+  async findAtiva(empresaId: string, id: string) {
+    const conta = await this.findOne(empresaId, id);
+    if (!conta.ativo) throw new BadRequestException(`A conta bancária ${conta.nome} está inativa`);
     return conta;
   }
 
@@ -31,6 +41,12 @@ export class ContasBancariasService {
   async update(empresaId: string, id: string, dto: UpdateContaBancariaDto) {
     const conta = await this.findOne(empresaId, id);
     if (dto.nome && dto.nome !== conta.nome) await this.ensureNomeLivre(empresaId, dto.nome);
+    if (dto.dataSaldoInicial && dto.dataSaldoInicial > conta.dataSaldoInicial) {
+      const anterior = await this.movimentacoes.existsBy({ contaBancariaId: id, data: LessThan(dto.dataSaldoInicial) });
+      if (anterior) {
+        throw new BadRequestException('Há movimentações anteriores à nova data do saldo inicial');
+      }
+    }
     this.repo.merge(conta, dto);
     this.validarDadosBancarios(conta);
     return this.repo.save(conta);

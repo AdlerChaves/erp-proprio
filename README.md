@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdlerChaves/erp-proprio/actions/workflows/ci.yml)
 
-API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias) e **Contas a Receber**.
+API em NestJS + PostgreSQL (TypeORM) com autenticação JWT, multiempresa, cadastros básicos (clientes, fornecedores, produtos e serviços, plano de contas, centros de custo e contas bancárias), **Contas a Receber**, **Contas a Pagar** e **movimentação bancária** com saldo e extrato.
 
 ## Rodando com Docker
 
@@ -34,9 +34,9 @@ npm run start:dev
 | Perfil | Pode |
 |---|---|
 | `ADMIN` | Tudo, incluindo usuários, dados da empresa e remoção de qualquer cadastro |
-| `FINANCEIRO` | Criar e alterar todos os cadastros e contas a receber |
-| `VENDAS` | Criar e alterar clientes e produtos |
-| `CONSULTA` | Só leitura |
+| `FINANCEIRO` | Criar e alterar todos os cadastros, contas a receber e a pagar, e movimentações bancárias |
+| `VENDAS` | Criar e alterar clientes e produtos; não vê saldos nem extratos |
+| `CONSULTA` | Só leitura, incluindo saldos e extratos |
 
 A empresa sempre mantém pelo menos um `ADMIN` ativo.
 
@@ -70,7 +70,20 @@ A empresa sempre mantém pelo menos um `ADMIN` ativo.
 | POST | `/api/contas-receber` | Cria conta (status `ABERTA`), com categoria e centro de custo opcionais |
 | GET/PATCH | `/api/contas-receber/:id` | Consulta / altera (paga ou cancelada: só categoria e centro de custo) |
 | POST | `/api/contas-receber/:id/baixa` | Registra pagamento (`PAGA`) na conta bancária informada em `contaBancariaId` |
+| POST | `/api/contas-receber/:id/estorno` | Desfaz a baixa: volta a `ABERTA` e remove a movimentação bancária |
 | POST | `/api/contas-receber/:id/cancelamento` | Cancela (`CANCELADA`) |
+| GET | `/api/contas-pagar?fornecedorId=&planoContaId=&centroCustoId=&status=&vencimentoDe=&vencimentoAte=` | Lista com filtros |
+| POST | `/api/contas-pagar` | Cria conta (status `ABERTA`), com categoria e centro de custo opcionais |
+| GET/PATCH | `/api/contas-pagar/:id` | Consulta / altera (paga ou cancelada: só categoria e centro de custo) |
+| POST | `/api/contas-pagar/:id/baixa` | Registra pagamento (`PAGA`) saindo da conta bancária informada em `contaBancariaId` |
+| POST | `/api/contas-pagar/:id/estorno` | Desfaz a baixa: volta a `ABERTA` e remove a movimentação bancária |
+| POST | `/api/contas-pagar/:id/cancelamento` | Cancela (`CANCELADA`) |
+| GET | `/api/movimentacoes?contaBancariaId=&tipo=&origem=&de=&ate=` | Lista movimentações bancárias |
+| POST | `/api/movimentacoes` | Lança movimentação avulsa (tarifa, rendimento, ajuste) |
+| POST | `/api/movimentacoes/transferencias` | Transfere entre duas contas da empresa |
+| DELETE | `/api/movimentacoes/:id` | Remove avulsa ou as duas pernas de uma transferência |
+| GET | `/api/movimentacoes/saldos?data=` | Saldo de cada conta ao fim do dia (padrão: hoje) |
+| GET | `/api/movimentacoes/extrato?contaBancariaId=&de=&ate=` | Extrato com saldo anterior, saldo após cada linha e saldo final |
 
 Regras dos cadastros:
 
@@ -80,10 +93,18 @@ Regras dos cadastros:
 - Contas bancárias exigem banco, agência e número, exceto o tipo `CAIXA`.
 - Toda empresa nova recebe um plano de contas padrão (raiz `1` Receitas e `2` Despesas, com cerca de 30 contas), que pode ser editado e ampliado.
 
-Contas a receber:
+Contas a receber e contas a pagar (mesmas regras; a pagar usa fornecedor e categoria de despesa):
 
-- A categoria (`planoContaId`) é opcional e precisa ser uma conta de receita analítica e ativa. O centro de custo também é opcional e precisa estar ativo. Os dois podem ser definidos ou trocados depois, inclusive em contas pagas ou canceladas; envie `null` para remover.
+- A categoria (`planoContaId`) é opcional e precisa ser uma conta analítica e ativa do tipo certo (receita ou despesa). O centro de custo também é opcional e precisa estar ativo. Os dois podem ser definidos ou trocados depois, inclusive em contas pagas ou canceladas; envie `null` para remover.
 - A baixa exige `contaBancariaId` (conta ativa da empresa). `valorPago` e `dataPagamento` são opcionais e assumem o valor da conta e a data de hoje.
+
+Movimentação bancária:
+
+- O saldo de uma conta é o saldo inicial mais as entradas e menos as saídas até a data consultada. Somas são feitas em centavos inteiros.
+- Cada baixa gera, na mesma transação, uma entrada (a receber) ou saída (a pagar) na conta bancária. O estorno da baixa remove essa movimentação; ela não pode ser apagada diretamente.
+- Transferências geram uma saída e uma entrada ligadas por `transferenciaId`; remover uma remove as duas.
+- Movimentações avulsas aceitam categoria (receita na entrada, despesa na saída) e centro de custo.
+- Nenhuma movimentação pode ter data anterior à data do saldo inicial da conta, e essa data não pode ser movida para depois de uma movimentação existente.
 - Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
 ## Testes
@@ -103,6 +124,8 @@ npm run test:e2e
 | `test/multiempresa.e2e-spec.ts` | Usuário em várias empresas: login, troca e criação de empresa |
 | `test/cadastros.e2e-spec.ts` | CRUD, isolamento e permissões de cada cadastro, e as regras específicas de cada um |
 | `test/contas-receber.e2e-spec.ts` | Plano de contas padrão, categoria e centro de custo, baixa com conta bancária, datas e estados da conta |
+| `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
+| `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 

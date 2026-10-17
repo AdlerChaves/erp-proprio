@@ -93,3 +93,12 @@ export async function criarContaBancaria(app: INestApplication, token: string) {
     .expect(201);
   return res.body as { id: string };
 }
+
+let documentoFornecedor = 30_000_000_000;
+
+export async function criarFornecedor(app: INestApplication, token: string) {
+  const res = await api(app, token)
+    .post('/fornecedores', { nome: 'Fornecedor', documento: String(++documentoFornecedor) })
+    .expect(201);
+  return res.body as { id: string };
+}

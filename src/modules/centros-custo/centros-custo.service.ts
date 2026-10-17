@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CentroCusto } from './centro-custo.entity';
@@ -16,6 +16,12 @@ export class CentrosCustoService {
   async findOne(empresaId: string, id: string) {
     const centro = await this.repo.findOneBy({ id, empresaId });
     if (!centro) throw new NotFoundException(`Centro de custo ${id} não encontrado`);
+    return centro;
+  }
+
+  async findAtivo(empresaId: string, id: string) {
+    const centro = await this.findOne(empresaId, id);
+    if (!centro.ativo) throw new BadRequestException(`O centro de custo ${centro.nome} está inativo`);
     return centro;
   }
 

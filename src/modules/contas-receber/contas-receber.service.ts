@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, DataSource, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { CentrosCustoService } from '../centros-custo/centros-custo.service';
 import { ClientesService } from '../clientes/clientes.service';
 import { ContasBancariasService } from '../contas-bancarias/contas-bancarias.service';
+import { OrigemMovimentacao, TipoMovimentacao } from '../movimentacoes/movimentacao-bancaria.entity';
+import { MovimentacoesService } from '../movimentacoes/movimentacoes.service';
 import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
 import { ContaReceber, StatusContaReceber } from './conta-receber.entity';
@@ -22,11 +24,13 @@ const CAMPOS_CLASSIFICACAO = ['planoContaId', 'centroCustoId'];
 @Injectable()
 export class ContasReceberService {
   constructor(
+    private readonly dataSource: DataSource,
     @InjectRepository(ContaReceber) private readonly repo: Repository<ContaReceber>,
     private readonly clientes: ClientesService,
     private readonly planoContas: PlanoContasService,
     private readonly centrosCusto: CentrosCustoService,
     private readonly contasBancarias: ContasBancariasService,
+    private readonly movimentacoes: MovimentacoesService,
   ) {}
 
   findAll(empresaId: string, filtro: FiltroContaReceberDto) {
@@ -80,15 +84,41 @@ export class ContasReceberService {
 
   async baixar(empresaId: string, id: string, dto: BaixaContaReceberDto) {
     const conta = await this.findAbertaOuFalha(empresaId, id);
-    const contaBancaria = await this.contasBancarias.findOne(empresaId, dto.contaBancariaId);
-    if (!contaBancaria.ativo) {
-      throw new BadRequestException(`A conta bancária ${contaBancaria.nome} está inativa`);
-    }
+    const contaBancaria = await this.contasBancarias.findAtiva(empresaId, dto.contaBancariaId);
     conta.contaBancariaId = contaBancaria.id;
     conta.valorPago = dto.valorPago ?? conta.valor;
     conta.dataPagamento = dto.dataPagamento ?? hoje();
     conta.status = StatusContaReceber.PAGA;
-    await this.repo.save(conta);
+    await this.dataSource.transaction(async (m) => {
+      await m.save(conta);
+      await this.movimentacoes.registrarBaixa(m, {
+        empresaId,
+        contaBancaria,
+        tipo: TipoMovimentacao.ENTRADA,
+        valor: conta.valorPago!,
+        data: conta.dataPagamento!,
+        descricao: `Recebimento: ${conta.descricao}`,
+        origem: OrigemMovimentacao.CONTA_RECEBER,
+        contaReceberId: conta.id,
+      });
+    });
+    return this.findOne(empresaId, id);
+  }
+
+  /** Desfaz a baixa: a conta volta a ABERTA e a movimentação bancária gerada por ela é removida. */
+  async estornar(empresaId: string, id: string) {
+    const conta = await this.findSemRelacoes(empresaId, id);
+    if (conta.status !== StatusContaReceber.PAGA) {
+      throw new BadRequestException(`Conta ${id} está ${conta.status}; só contas pagas têm baixa a estornar`);
+    }
+    conta.status = StatusContaReceber.ABERTA;
+    conta.valorPago = null;
+    conta.dataPagamento = null;
+    conta.contaBancariaId = null;
+    await this.dataSource.transaction(async (m) => {
+      await this.movimentacoes.removerDaBaixa(m, { contaReceberId: conta.id });
+      await m.save(conta);
+    });
     return this.findOne(empresaId, id);
   }
 
@@ -120,21 +150,9 @@ export class ContasReceberService {
     dto: { planoContaId?: string | null; centroCustoId?: string | null },
   ) {
     if (dto.planoContaId) {
-      const categoria = await this.planoContas.findOne(empresaId, dto.planoContaId);
-      if (categoria.tipo !== TipoPlanoConta.RECEITA) {
-        throw new BadRequestException(`A categoria ${categoria.codigo} não é de receita`);
-      }
-      if (!categoria.aceitaLancamento) {
-        throw new BadRequestException(`A categoria ${categoria.codigo} é sintética; escolha uma subconta`);
-      }
-      if (!categoria.ativo) {
-        throw new BadRequestException(`A categoria ${categoria.codigo} está inativa`);
-      }
+      await this.planoContas.findParaLancamento(empresaId, dto.planoContaId, TipoPlanoConta.RECEITA);
     }
-    if (dto.centroCustoId) {
-      const centro = await this.centrosCusto.findOne(empresaId, dto.centroCustoId);
-      if (!centro.ativo) throw new BadRequestException(`O centro de custo ${centro.nome} está inativo`);
-    }
+    if (dto.centroCustoId) await this.centrosCusto.findAtivo(empresaId, dto.centroCustoId);
   }
 
   private validarDatas(emissao: string, vencimento: string) {

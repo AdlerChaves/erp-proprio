@@ -51,6 +51,12 @@ export class ContasReceberController {
     return this.service.baixar(sessao.empresaId, id, dto);
   }
 
+  @Post(':id/estorno')
+  @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
+  estornar(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.estornar(sessao.empresaId, id);
+  }
+
   @Post(':id/cancelamento')
   @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO)
   cancelar(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
