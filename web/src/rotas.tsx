@@ -3,10 +3,12 @@ import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import { Layout } from './layout/Layout';
 import { Auditoria } from './paginas/Auditoria';
 import { CentrosCusto } from './paginas/CentrosCusto';
+import { Compras } from './paginas/Compras';
 import { ContasBancarias } from './paginas/ContasBancarias';
 import { Contas, PAGAR, RECEBER } from './paginas/Contas';
 import { Dre } from './paginas/Dre';
 import { Empresa } from './paginas/Empresa';
+import { Estoque } from './paginas/Estoque';
 import { Cadastro, Login } from './paginas/Entrada';
 import { Extrato } from './paginas/Extrato';
 import { Painel } from './paginas/Painel';
@@ -14,6 +16,7 @@ import { CLIENTES, FORNECEDORES, Pessoas } from './paginas/Pessoas';
 import { PlanoContas } from './paginas/PlanoContas';
 import { Produtos } from './paginas/Produtos';
 import { Usuarios } from './paginas/Usuarios';
+import { Vendas } from './paginas/Vendas';
 import { useSessao } from './sessao/sessao';
 
 function Carregando() {
@@ -57,6 +60,9 @@ export const rotas = createBrowserRouter([
           { path: '/contas-pagar', element: <Contas key="pagar" config={PAGAR} /> },
           { path: '/clientes', element: <Pessoas key="clientes" config={CLIENTES} /> },
           { path: '/fornecedores', element: <Pessoas key="fornecedores" config={FORNECEDORES} /> },
+          { path: '/vendas', element: <Vendas /> },
+          { path: '/compras', element: <Compras /> },
+          { path: '/estoque', element: <Estoque /> },
           { path: '/extrato', element: <Extrato /> },
           { path: '/dre', element: <Dre /> },
           { path: '/produtos', element: <Produtos /> },

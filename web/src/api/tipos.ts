@@ -146,6 +146,8 @@ export interface Produto {
   custo: number | null;
   ncm: string | null;
   codigoServico: string | null;
+  /** Saldo físico; só produtos controlam estoque. */
+  estoque: number;
   ativo: boolean;
 }
 
@@ -215,4 +217,93 @@ export interface PaginaAuditoria {
   total: number;
   limite: number;
   deslocamento: number;
+}
+
+export type StatusVenda = 'ORCAMENTO' | 'PEDIDO' | 'FATURADA' | 'CANCELADA';
+export type StatusCompra = 'PEDIDO' | 'RECEBIDA' | 'CANCELADA';
+
+/** Campos comuns a vendas e compras. */
+interface DocumentoComercial {
+  id: string;
+  numero: number;
+  dataEmissao: string;
+  parcelas: number;
+  primeiroVencimento: string | null;
+  planoContaId: string | null;
+  planoConta?: PlanoConta | null;
+  centroCustoId: string | null;
+  centroCusto?: CentroCusto | null;
+  observacoes: string | null;
+  total: number;
+  /** Contas geradas; só vem no detalhe. */
+  contas?: ContaFinanceira[];
+  /** Avisos de estoque negativo, nas respostas de faturamento e cancelamento. */
+  avisos?: string[];
+}
+
+export interface ItemVenda {
+  id: string;
+  produtoId: string;
+  produto?: Produto;
+  ordem: number;
+  descricao: string;
+  quantidade: number;
+  precoUnitario: number;
+  desconto: number;
+  total: number;
+}
+
+export interface Venda extends DocumentoComercial {
+  clienteId: string;
+  cliente: Pessoa;
+  status: StatusVenda;
+  dataFaturamento: string | null;
+  itens?: ItemVenda[];
+}
+
+export interface ItemCompra {
+  id: string;
+  produtoId: string;
+  produto?: Produto;
+  ordem: number;
+  descricao: string;
+  quantidade: number;
+  custoUnitario: number;
+  total: number;
+}
+
+export interface Compra extends DocumentoComercial {
+  fornecedorId: string;
+  fornecedor: Pessoa;
+  status: StatusCompra;
+  dataRecebimento: string | null;
+  itens?: ItemCompra[];
+}
+
+export interface PosicaoEstoque {
+  itens: {
+    produto: { id: string; codigo: string; descricao: string; unidade: string; ativo: boolean };
+    estoque: number;
+    reservado: number;
+    disponivel: number;
+    custoMedio: number | null;
+    valorEstoque: number;
+  }[];
+  valorTotal: number;
+}
+
+export type OrigemMovimentacaoEstoque = 'COMPRA' | 'VENDA' | 'AJUSTE' | 'ESTORNO_COMPRA' | 'ESTORNO_VENDA';
+
+export interface MovimentacaoEstoque {
+  id: string;
+  produtoId: string;
+  data: string;
+  tipo: TipoMovimentacao;
+  origem: OrigemMovimentacaoEstoque;
+  quantidade: number;
+  custoUnitario: number;
+  saldo: number;
+  descricao: string;
+  vendaId: string | null;
+  compraId: string | null;
 }

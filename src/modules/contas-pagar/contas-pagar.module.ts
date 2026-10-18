@@ -20,5 +20,6 @@ import { ContasPagarService } from './contas-pagar.service';
   ],
   controllers: [ContasPagarController],
   providers: [ContasPagarService],
+  exports: [ContasPagarService],
 })
 export class ContasPagarModule {}

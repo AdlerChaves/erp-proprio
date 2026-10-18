@@ -8,7 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { decimalTransformer } from '../../common/decimal.transformer';
+import { decimalTransformer, quantidadeTransformer } from '../../common/decimal.transformer';
 import { Empresa } from '../empresas/empresa.entity';
 
 export enum TipoProduto {
@@ -46,8 +46,13 @@ export class Produto {
   @Column({ name: 'preco_venda', type: 'numeric', precision: 14, scale: 2, transformer: decimalTransformer })
   precoVenda: number;
 
+  /** Custo médio: informado no cadastro e recalculado a cada entrada no estoque. */
   @Column({ type: 'numeric', precision: 14, scale: 2, nullable: true, transformer: decimalTransformer })
   custo: number | null;
+
+  /** Saldo físico. Só produtos controlam estoque; pode ficar negativo (venda sem saldo, com aviso). */
+  @Column({ type: 'numeric', precision: 14, scale: 3, default: 0, transformer: quantidadeTransformer })
+  estoque: number;
 
   /** Só para produtos: classificação fiscal de 8 dígitos. */
   @Column({ type: 'varchar', length: 8, nullable: true })

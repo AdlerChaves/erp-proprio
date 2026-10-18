@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EstoqueService } from '../estoque/estoque.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { FiltroProdutoDto } from './dto/filtro-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
@@ -8,7 +9,10 @@ import { Produto, TipoProduto } from './produto.entity';
 
 @Injectable()
 export class ProdutosService {
-  constructor(@InjectRepository(Produto) private readonly repo: Repository<Produto>) {}
+  constructor(
+    @InjectRepository(Produto) private readonly repo: Repository<Produto>,
+    private readonly estoque: EstoqueService,
+  ) {}
 
   findAll(empresaId: string, filtro: FiltroProdutoDto) {
     return this.repo.find({ where: { empresaId, tipo: filtro.tipo }, order: { descricao: 'ASC' } });
@@ -31,6 +35,9 @@ export class ProdutosService {
     const produto = await this.findOne(empresaId, id);
     if (dto.codigo && dto.codigo !== produto.codigo) {
       await this.ensureCodigoLivre(empresaId, dto.codigo);
+    }
+    if (dto.tipo === TipoProduto.SERVICO && produto.tipo === TipoProduto.PRODUTO && (await this.estoque.temMovimentacoes(empresaId, id))) {
+      throw new BadRequestException(`${produto.descricao} já movimentou estoque e não pode virar serviço`);
     }
     this.repo.merge(produto, dto);
     this.validarCamposFiscais(produto);

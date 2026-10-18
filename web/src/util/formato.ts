@@ -81,3 +81,12 @@ export function proximoCodigo(codigoPai: string | null, existentes: string[]) {
   const maior = filhos.reduce((m, f) => Math.max(m, Number(f)), 0);
   return prefixo + String(maior + 1).padStart(largura, '0');
 }
+
+const QUANTIDADE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
+
+/** 1.5 → "1,5"; 1000 → "1.000". */
+export const qtd = (valor: number) => QUANTIDADE.format(valor);
+
+/** Total de um item em centavos, com o mesmo arredondamento da API: quantidade × preço − desconto. */
+export const totalItemCentavos = (quantidade: number, preco: number, desconto = 0) =>
+  Math.round((Math.round(quantidade * 1000) * Math.round(preco * 100)) / 1000) - Math.round(desconto * 100);

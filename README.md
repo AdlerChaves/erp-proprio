@@ -38,6 +38,7 @@ npm run dev                # frontend em http://localhost:5173, com /api repassa
 React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
+- Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
 - Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo.
 - Administração: dados da empresa e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
@@ -118,6 +119,14 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET | `/api/movimentacoes/saldos?data=` | Saldo de cada conta ao fim do dia (padrão: hoje) |
 | GET | `/api/movimentacoes/extrato?contaBancariaId=&de=&ate=` | Extrato com saldo anterior, saldo após cada linha e saldo final |
 | GET | `/api/auditoria?usuarioId=&recurso=&recursoId=&de=&ate=&limite=&deslocamento=` | Trilha de auditoria da empresa, mais recente primeiro; `de` e `ate` são dias no fuso `APP_TIMEZONE` (`ADMIN`) |
+| POST | `/api/vendas` | Orçamento (padrão) ou pedido, com itens; preço padrão do cadastro |
+| POST | `/api/vendas/:id/aprovacao` | Orçamento vira pedido e passa a reservar estoque |
+| POST | `/api/vendas/:id/faturamento` | Baixa o estoque e lança as contas a receber; devolve `avisos` de estoque negativo |
+| POST | `/api/vendas/:id/cancelamento` | Cancela; se faturada, devolve o estoque e cancela as contas (`ADMIN`/`FINANCEIRO`) |
+| POST | `/api/compras` · `/:id/recebimento` · `/:id/cancelamento` | Pedido de compra; o recebimento dá entrada no estoque e lança as contas a pagar |
+| GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
+| GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
+| POST | `/api/estoque/ajustes` | Entrada ou saída manual com motivo (`ADMIN`/`FINANCEIRO`) |
 | GET | `/api/financeiro/fluxo-caixa?de=&ate=&agrupamento=mes\|dia` | Realizado e previsto por período, saldo acumulado e contas em atraso |
 | GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa` | Resultado por categoria, somado até as contas sintéticas |
 
@@ -146,6 +155,15 @@ Movimentação bancária:
 - Nenhuma movimentação pode ter data anterior à data do saldo inicial da conta, e essa data não pode ser movida para depois de uma movimentação existente.
 - "Hoje" é calculado no fuso de `APP_TIMEZONE` (padrão `America/Sao_Paulo`), não em UTC.
 
+Vendas, compras e estoque:
+
+- Venda: `ORCAMENTO` não mexe em nada; `PEDIDO` reserva estoque (disponível = estoque − reservado); `FATURADA` baixa o estoque e lança as contas a receber (`vendaId`) em parcelas mensais a partir de `primeiroVencimento` (padrão: à vista, no dia do faturamento). Só orçamentos e pedidos podem ser alterados; itens enviados substituem os anteriores.
+- O estoque pode ficar negativo: faturar sem saldo é permitido, e a resposta traz `avisos`. Serviços entram em vendas, mas não controlam estoque nem entram em compras.
+- Compra: `PEDIDO` → `RECEBIDA` (entrada no estoque e contas a pagar com `compraId`). O custo do produto passa a ser o custo médio ponderado, recalculado a cada entrada.
+- Cancelar uma venda faturada ou uma compra recebida faz movimentações inversas, com o mesmo custo, e cancela as contas geradas, desde que nenhuma tenha baixa. Vendas faturadas só são canceladas por `ADMIN` ou `FINANCEIRO`; compras não aparecem para `VENDAS`.
+- Vendas e compras são numeradas em sequência por empresa. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
+- Um produto que já movimentou estoque não pode virar serviço.
+
 Relatórios:
 
 - **Fluxo de caixa**: contas bancárias abertas dentro do período entram com o saldo inicial no período da abertura (`aberturas`). Realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
@@ -172,6 +190,7 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/vendas-estoque.e2e-spec.ts` | Custo médio, kardex, ciclo da venda, reservas, estoque negativo, cancelamentos, compras, numeração e operações simultâneas, perfis e isolamento |
 | `test/sessao-cookie.e2e-spec.ts` | Sessão em cookie httpOnly, CSRF nas escritas, troca de empresa, senha e logout |
 | `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria (inclusive o filtro por dia no fuso da empresa), cabeçalhos, CORS, limite por IP e segredo do JWT |
 

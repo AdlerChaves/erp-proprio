@@ -8,16 +8,19 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CentrosCustoModule } from './modules/centros-custo/centros-custo.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
+import { ComprasModule } from './modules/compras/compras.module';
 import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancarias.module';
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
 import { ContasReceberModule } from './modules/contas-receber/contas-receber.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
+import { EstoqueModule } from './modules/estoque/estoque.module';
 import { FinanceiroModule } from './modules/financeiro/financeiro.module';
 import { FornecedoresModule } from './modules/fornecedores/fornecedores.module';
 import { MovimentacoesModule } from './modules/movimentacoes/movimentacoes.module';
 import { PlanoContasModule } from './modules/plano-contas/plano-contas.module';
 import { ProdutosModule } from './modules/produtos/produtos.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { VendasModule } from './modules/vendas/vendas.module';
 
 @Module({
   imports: [
@@ -41,6 +44,9 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     ContasPagarModule,
     MovimentacoesModule,
     FinanceiroModule,
+    EstoqueModule,
+    VendasModule,
+    ComprasModule,
   ],
   controllers: [HealthController],
 })

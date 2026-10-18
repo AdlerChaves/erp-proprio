@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconBuilding,
   IconBuildingBank,
+  IconBuildingWarehouse,
   IconChartBar,
   IconChevronDown,
   IconFileSpreadsheet,
@@ -15,6 +16,8 @@ import {
   IconPackage,
   IconReceipt,
   IconReceiptRefund,
+  IconShoppingBag,
+  IconShoppingCart,
   IconTargetArrow,
   IconTruck,
   IconUserCog,
@@ -35,6 +38,14 @@ interface ItemMenu {
 
 const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
   { itens: [{ rota: '/', rotulo: 'Painel', icone: IconHome }] },
+  {
+    grupo: 'Comercial',
+    itens: [
+      { rota: '/vendas', rotulo: 'Vendas', icone: IconShoppingBag },
+      { rota: '/compras', rotulo: 'Compras', icone: IconShoppingCart, permissao: 'verSaldos' },
+      { rota: '/estoque', rotulo: 'Estoque', icone: IconBuildingWarehouse },
+    ],
+  },
   {
     grupo: 'Financeiro',
     itens: [
@@ -87,6 +98,8 @@ export function Layout() {
 
   const sairAgora = async (todos: boolean) => {
     await sair(todos);
+    // Avisos da sessão anterior não devem aparecer para quem entrar em seguida.
+    notifications.clean();
     navegar('/login');
   };
 
@@ -155,7 +168,7 @@ export function Layout() {
             return (
               <div key={grupo ?? 'inicio'}>
                 {grupo && (
-                  <Text size="xs" fw={600} c="dimmed" tt="uppercase" px="sm" mt="md" mb={4}>
+                  <Text size="xs" fw={600} c="dimmed" tt="uppercase" px="sm" mt="sm" mb={2}>
                     {grupo}
                   </Text>
                 )}
@@ -165,6 +178,7 @@ export function Layout() {
                     component={RouterLink}
                     to={item.rota}
                     label={item.rotulo}
+                    py={6}
                     leftSection={<item.icone size={18} />}
                     active={item.rota === '/' ? local.pathname === '/' : local.pathname.startsWith(item.rota)}
                     onClick={close}

@@ -20,5 +20,6 @@ import { ContasReceberService } from './contas-receber.service';
   ],
   controllers: [ContasReceberController],
   providers: [ContasReceberService],
+  exports: [ContasReceberService],
 })
 export class ContasReceberModule {}

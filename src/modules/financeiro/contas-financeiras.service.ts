@@ -42,6 +42,22 @@ export interface ContaFinanceira {
   baixas?: Baixa[];
 }
 
+/** Venda ou compra que gerou a conta. */
+export type OrigemConta = { vendaId: string } | { compraId: string };
+
+/** Conta ou parcelas geradas por uma venda ou compra. */
+export interface LancamentoDeOrigem {
+  pessoaId: string;
+  descricao: string;
+  valor: number;
+  dataEmissao: string;
+  primeiroVencimento: string;
+  parcelas: number;
+  planoContaId: string | null;
+  centroCustoId: string | null;
+  origem: OrigemConta;
+}
+
 /** O que diferencia contas a receber de contas a pagar. */
 export interface ConfigContas {
   /** Para mensagens: "Conta a receber". */
@@ -168,26 +184,92 @@ export abstract class ContasFinanceirasService<T extends ContaFinanceira> {
     this.validarDatas(dataEmissao, dto.dataVencimento);
 
     const { parcelas, ...dados } = dto;
-    const parcelamentoId = randomUUID();
-    const valores = dividirEmParcelas(dto.valor, parcelas);
+    let parcelamentoId = '';
     await this.dataSource.transaction(async (m) => {
-      for (const [i, valor] of valores.entries()) {
-        await m.save(
-          m.create(this.repo.target, {
-            ...dados,
-            empresaId,
-            dataEmissao,
-            valor,
-            dataVencimento: somarMeses(dto.dataVencimento, i),
-            descricao: `${dto.descricao} (${i + 1}/${parcelas})`.slice(0, 255),
-            parcelamentoId,
-            parcela: i + 1,
-            totalParcelas: parcelas,
-          } as DeepPartial<T>),
-        );
-      }
+      parcelamentoId = await this.gravarParcelas(m, { ...dados, empresaId, dataEmissao }, parcelas);
     });
     return this.findAll(empresaId, { parcelamentoId });
+  }
+
+  /**
+   * Lança, dentro da transação de quem chama, a conta (ou as parcelas mensais) de uma venda ou compra.
+   * A categoria e o centro de custo são validados de novo: podem ter sido desativados desde o pedido.
+   */
+  async lancarDaOrigem(m: EntityManager, empresaId: string, l: LancamentoDeOrigem) {
+    await this.validarClassificacao(empresaId, l);
+    this.validarDatas(l.dataEmissao, l.primeiroVencimento);
+    if (centavos(l.valor) < l.parcelas) throw new BadRequestException('O valor não cobre um centavo por parcela');
+    await this.gravarParcelas(
+      m,
+      {
+        empresaId,
+        [this.config.campoPessoa]: l.pessoaId,
+        descricao: l.descricao,
+        valor: l.valor,
+        dataEmissao: l.dataEmissao,
+        dataVencimento: l.primeiroVencimento,
+        planoContaId: l.planoContaId,
+        centroCustoId: l.centroCustoId,
+        ...l.origem,
+      },
+      l.parcelas,
+    );
+  }
+
+  /** Cancela, na transação de quem chama, as contas de uma venda ou compra; recusa se alguma já tem baixa. */
+  async cancelarDaOrigem(m: EntityManager, empresaId: string, origem: OrigemConta) {
+    const contas = await m.getRepository(this.repo.target).find({
+      where: { empresaId, ...origem } as unknown as FindOptionsWhere<T>,
+      lock: { mode: 'pessimistic_write' },
+    });
+    const pagas = contas.filter((c) => c.status === StatusConta.PARCIAL || c.status === StatusConta.PAGA);
+    if (pagas.length) {
+      throw new BadRequestException(
+        `${pagas.map((c) => `"${c.descricao}"`).join(', ')} já ${pagas.length === 1 ? 'tem' : 'têm'} pagamento registrado; estorne antes de cancelar`,
+      );
+    }
+    for (const conta of contas.filter((c) => c.status === StatusConta.ABERTA)) {
+      await this.atualizarStatus(m, conta.id, StatusConta.CANCELADA);
+    }
+  }
+
+  async findDaOrigem(empresaId: string, origem: OrigemConta) {
+    const contas = await this.repo.find({
+      where: { empresaId, ...origem } as unknown as FindOptionsWhere<T>,
+      relations: this.relacoes,
+      order: { dataVencimento: 'ASC', parcela: 'ASC', baixas: ORDEM_BAIXAS } as never,
+    });
+    return contas.map((conta) => this.apresentar(conta));
+  }
+
+  /**
+   * Grava uma conta, ou as parcelas mensais a partir de dataVencimento, com o mesmo parcelamentoId
+   * e a descrição "Descrição (1/3)". Devolve o parcelamentoId (vazio se for uma conta só).
+   */
+  private async gravarParcelas(
+    m: EntityManager,
+    dados: Record<string, unknown> & { descricao: string; valor: number; dataVencimento: string },
+    parcelas: number,
+  ) {
+    if (parcelas === 1) {
+      await m.save(m.create(this.repo.target, dados as DeepPartial<T>));
+      return '';
+    }
+    const parcelamentoId = randomUUID();
+    for (const [i, valor] of dividirEmParcelas(dados.valor, parcelas).entries()) {
+      await m.save(
+        m.create(this.repo.target, {
+          ...dados,
+          valor,
+          dataVencimento: somarMeses(dados.dataVencimento, i),
+          descricao: `${dados.descricao} (${i + 1}/${parcelas})`.slice(0, 255),
+          parcelamentoId,
+          parcela: i + 1,
+          totalParcelas: parcelas,
+        } as DeepPartial<T>),
+      );
+    }
+    return parcelamentoId;
   }
 
   async update(empresaId: string, id: string, dto: UpdateContaDto) {

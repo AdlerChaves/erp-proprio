@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { data, documento, lerDataBR, mesAno, moeda, proximoCodigo } from './formato';
+import { data, documento, lerDataBR, mesAno, moeda, proximoCodigo, qtd, totalItemCentavos } from './formato';
 
 describe('formatos', () => {
   it('moeda em reais', () => {
@@ -49,5 +49,17 @@ describe('proximoCodigo', () => {
 
   it('não confunde 1.1 com filhos de 1.10', () => {
     expect(proximoCodigo('1', ['1', '1.1', '1.10', '1.10.01'])).toBe('1.11');
+  });
+});
+
+describe('itens', () => {
+  it('formata quantidades com até 3 casas', () => {
+    expect([qtd(1.5), qtd(1000), qtd(0.125), qtd(-2)]).toEqual(['1,5', '1.000', '0,125', '-2']);
+  });
+
+  it('calcula o total do item como a API, em centavos', () => {
+    expect(totalItemCentavos(1.5, 18.9)).toBe(2835);
+    expect(totalItemCentavos(2, 80, 10.5)).toBe(14950);
+    expect(totalItemCentavos(0.333, 0.1)).toBe(3);
   });
 });

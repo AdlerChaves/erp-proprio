@@ -31,7 +31,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={tema}>
       <DatesProvider settings={{ locale: 'pt-br', firstDayOfWeek: 0 }}>
-        <Notifications position="top-right" />
+        {/* Embaixo, para não cobrir o cabeçalho das gavetas de detalhe, que abrem à direita. */}
+        <Notifications position="bottom-right" />
         <QueryClientProvider client={queryClient}>
           <SessaoProvider>
             <RouterProvider router={rotas} />

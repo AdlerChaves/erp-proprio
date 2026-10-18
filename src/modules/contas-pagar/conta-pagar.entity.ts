@@ -17,6 +17,7 @@ import { Baixa } from '../financeiro/baixa.entity';
 import { ContaFinanceira } from '../financeiro/contas-financeiras.service';
 import { StatusConta } from '../financeiro/status-conta.enum';
 import { PlanoConta } from '../plano-contas/plano-conta.entity';
+import { Compra } from '../compras/compra.entity';
 
 /** Valor a pagar a um fornecedor. */
 @Entity('contas_pagar')
@@ -25,6 +26,7 @@ import { PlanoConta } from '../plano-contas/plano-conta.entity';
 @Index('IDX_contas_pagar_plano_conta', ['planoContaId'])
 @Index('IDX_contas_pagar_centro_custo', ['centroCustoId'])
 @Index('IDX_contas_pagar_parcelamento', ['parcelamentoId'])
+@Index('IDX_contas_pagar_compra', ['compraId'])
 export class ContaPagar implements ContaFinanceira {
   @PrimaryGeneratedColumn('uuid', { primaryKeyConstraintName: 'PK_contas_pagar' })
   id: string;
@@ -82,6 +84,14 @@ export class ContaPagar implements ContaFinanceira {
 
   @Column({ name: 'total_parcelas', type: 'smallint', nullable: true })
   totalParcelas: number | null;
+
+  /** Compra que gerou esta conta, se houver. */
+  @Column({ name: 'compra_id', type: 'uuid', nullable: true })
+  compraId: string | null;
+
+  @ManyToOne(() => Compra, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'compra_id', foreignKeyConstraintName: 'FK_contas_pagar_compra' })
+  compra: Compra | null;
 
   @OneToMany(() => Baixa, (baixa) => baixa.contaPagar)
   baixas: Baixa[];

@@ -10,6 +10,7 @@ const PERMISSOES = {
   escreverFinanceiro: ['ADMIN', 'FINANCEIRO'],
   escreverClientes: ['ADMIN', 'FINANCEIRO', 'VENDAS'],
   escreverProdutos: ['ADMIN', 'FINANCEIRO', 'VENDAS'],
+  vender: ['ADMIN', 'FINANCEIRO', 'VENDAS'],
   escreverCadastros: ['ADMIN', 'FINANCEIRO'],
   remover: ['ADMIN'],
   verSaldos: ['ADMIN', 'FINANCEIRO', 'CONSULTA'],
