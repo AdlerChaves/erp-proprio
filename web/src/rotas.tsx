@@ -1,11 +1,19 @@
 import { Center, Loader } from '@mantine/core';
 import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import { Layout } from './layout/Layout';
+import { Auditoria } from './paginas/Auditoria';
+import { CentrosCusto } from './paginas/CentrosCusto';
 import { ContasBancarias } from './paginas/ContasBancarias';
 import { Contas, PAGAR, RECEBER } from './paginas/Contas';
+import { Dre } from './paginas/Dre';
+import { Empresa } from './paginas/Empresa';
 import { Cadastro, Login } from './paginas/Entrada';
+import { Extrato } from './paginas/Extrato';
 import { Painel } from './paginas/Painel';
 import { CLIENTES, FORNECEDORES, Pessoas } from './paginas/Pessoas';
+import { PlanoContas } from './paginas/PlanoContas';
+import { Produtos } from './paginas/Produtos';
+import { Usuarios } from './paginas/Usuarios';
 import { useSessao } from './sessao/sessao';
 
 function Carregando() {
@@ -49,7 +57,15 @@ export const rotas = createBrowserRouter([
           { path: '/contas-pagar', element: <Contas key="pagar" config={PAGAR} /> },
           { path: '/clientes', element: <Pessoas key="clientes" config={CLIENTES} /> },
           { path: '/fornecedores', element: <Pessoas key="fornecedores" config={FORNECEDORES} /> },
+          { path: '/extrato', element: <Extrato /> },
+          { path: '/dre', element: <Dre /> },
+          { path: '/produtos', element: <Produtos /> },
           { path: '/contas-bancarias', element: <ContasBancarias /> },
+          { path: '/plano-contas', element: <PlanoContas /> },
+          { path: '/centros-custo', element: <CentrosCusto /> },
+          { path: '/empresa', element: <Empresa /> },
+          { path: '/usuarios', element: <Usuarios /> },
+          { path: '/auditoria', element: <Auditoria /> },
         ],
       },
     ],

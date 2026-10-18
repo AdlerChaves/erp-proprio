@@ -171,6 +171,21 @@ describe('Segurança', () => {
       expect(daB.body.itens.map((r: { acao: string }) => r.acao)).toEqual(['REGISTRO']);
     });
 
+    it('filtra por dia no fuso da empresa, não em UTC', async () => {
+      // 22h de 09/03 em Brasília já é 01h de 10/03 em UTC.
+      await app.get(DataSource).query(
+        `INSERT INTO auditoria (empresa_id, usuario_id, acao, criado_em) VALUES ($1, $2, 'NOITE', '2026-03-10T01:00:00Z')`,
+        [a.empresaId, a.usuarioId],
+      );
+      const acoes = async (filtro: string) =>
+        (await api(app, a.token).get(`/auditoria?${filtro}`).expect(200)).body.itens.map((r: { acao: string }) => r.acao);
+
+      expect(await acoes('de=2026-03-09&ate=2026-03-09')).toEqual(['NOITE']);
+      expect(await acoes('de=2026-03-10&ate=2026-03-10')).toEqual([]);
+      expect(await acoes('ate=2026-03-09')).toEqual(['NOITE']);
+      expect(await acoes('de=2026-03-10')).not.toContain('NOITE');
+    });
+
     it('só ADMIN consulta', async () => {
       const financeiro = await adicionarUsuario(app, a, Perfil.FINANCEIRO);
       await api(app, financeiro.token).get('/auditoria').expect(403);

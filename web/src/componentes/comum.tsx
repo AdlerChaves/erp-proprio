@@ -1,7 +1,7 @@
-import { Alert, Button, Group, Modal, NumberInput, type NumberInputProps, Stack, Text, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Menu, Modal, NumberInput, type NumberInputProps, Stack, Text, Title } from '@mantine/core';
 import { DateInput, type DateInputProps } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconDots, IconLock } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { lerDataBR } from '../util/formato';
 
@@ -49,6 +49,48 @@ export function ErroCarregamento({ erro }: { erro: unknown }) {
     <Alert color="red" icon={<IconAlertCircle size={18} />} title="Não foi possível carregar">
       {(erro as Error)?.message}
     </Alert>
+  );
+}
+
+/** Para quem abre pelo endereço uma tela que o perfil não acessa; a API recusaria de qualquer forma. */
+export function SemPermissao({ titulo }: { titulo: string }) {
+  return (
+    <>
+      <Cabecalho titulo={titulo} />
+      <Alert color="gray" icon={<IconLock size={18} />}>
+        Seu perfil não tem acesso a esta tela. Peça a um administrador da empresa, se precisar.
+      </Alert>
+    </>
+  );
+}
+
+export function SituacaoAtivo({ ativo, feminino = false }: { ativo: boolean; feminino?: boolean }) {
+  return (
+    <Badge variant="light" color={ativo ? 'teal' : 'gray'}>
+      {ativo ? (feminino ? 'Ativa' : 'Ativo') : feminino ? 'Inativa' : 'Inativo'}
+    </Badge>
+  );
+}
+
+/** Menu "⋯" de ações de uma linha; some quando não há nenhuma ação disponível. */
+export function MenuAcoes({ rotulo, itens }: { rotulo: string; itens: (false | null | undefined | { texto: string; aoClicar: () => void; perigosa?: boolean })[] }) {
+  const visiveis = itens.filter((i) => !!i);
+  if (visiveis.length === 0) return null;
+  return (
+    <Menu position="bottom-end">
+      <Menu.Target>
+        <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${rotulo}`}>
+          <IconDots size={18} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {visiveis.map((i) => (
+          <Menu.Item key={i.texto} color={i.perigosa ? 'red' : undefined} onClick={i.aoClicar}>
+            {i.texto}
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
   );
 }
 

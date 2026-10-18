@@ -9,9 +9,11 @@ export const CHAVE_SESSAO = ['sessao'] as const;
 const PERMISSOES = {
   escreverFinanceiro: ['ADMIN', 'FINANCEIRO'],
   escreverClientes: ['ADMIN', 'FINANCEIRO', 'VENDAS'],
+  escreverProdutos: ['ADMIN', 'FINANCEIRO', 'VENDAS'],
   escreverCadastros: ['ADMIN', 'FINANCEIRO'],
   remover: ['ADMIN'],
   verSaldos: ['ADMIN', 'FINANCEIRO', 'CONSULTA'],
+  administrar: ['ADMIN'],
 } satisfies Record<string, Perfil[]>;
 
 export type Permissao = keyof typeof PERMISSOES;
@@ -24,6 +26,10 @@ interface ValorSessao {
   entrar: (email: string, senha: string, empresaId?: string) => Promise<{ escolher?: EmpresaAcessivel[] }>;
   registrar: (dados: unknown) => Promise<void>;
   trocarEmpresa: (empresaId: string) => Promise<void>;
+  /** Os outros dispositivos saem; este recebe uma sessão nova. */
+  alterarSenha: (senhaAtual: string, novaSenha: string) => Promise<void>;
+  /** Recarrega usuário e empresas, por exemplo depois de renomear ou criar uma empresa. */
+  atualizar: () => Promise<void>;
   sair: (todosDispositivos?: boolean) => Promise<void>;
 }
 
@@ -80,11 +86,21 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       registrar: async (dados) => recomecar(await api.post<SessaoEntregue>('/auth/registrar', dados)),
       trocarEmpresa: async (empresaId) =>
         recomecar(await api.post<SessaoEntregue>('/auth/trocar-empresa', { empresaId })),
+      alterarSenha: async (senhaAtual, novaSenha) => {
+        const sessao = await api.patch<SessaoEntregue>('/auth/senha', { senhaAtual, novaSenha });
+        definirCsrf(sessao.csrfToken);
+        await queryClient.refetchQueries({ queryKey: CHAVE_SESSAO });
+      },
+      atualizar: async () => {
+        await queryClient.refetchQueries({ queryKey: CHAVE_SESSAO });
+      },
       sair: async (todosDispositivos = false) => {
         await api.post(todosDispositivos ? '/auth/sessoes/encerrar' : '/auth/logout').catch(() => undefined);
         definirCsrf(undefined);
-        queryClient.clear();
+        // A sessão vira null no lugar, sem remover a consulta: quem a observa precisa ser avisado.
+        // Um clear() deixaria a tela presa à consulta removida, ainda com o usuário logado.
         queryClient.setQueryData(CHAVE_SESSAO, null);
+        queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== CHAVE_SESSAO[0] });
       },
     }),
     [data, isPending, queryClient, recomecar],

@@ -1,11 +1,12 @@
-import { ActionIcon, Badge, Button, Card, Group, Loader, Menu, Modal, Select, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Card, Group, Loader, Modal, Select, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconDots, IconPlus } from '@tabler/icons-react';
+import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
 import type { ContaBancaria, Saldos, TipoContaBancaria } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
 import { useSessao } from '../sessao/sessao';
 import { data, digitos, hoje, moeda } from '../util/formato';
 
@@ -53,8 +54,8 @@ function FormConta({ conta, aoFechar }: { conta: ContaBancaria | null; aoFechar:
       return conta ? api.patch(`/contas-bancarias/${conta.id}`, corpo) : api.post('/contas-bancarias', corpo);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/contas-bancarias'] });
-      queryClient.invalidateQueries({ queryKey: ['saldos'] });
+      // O saldo inicial entra nos saldos, no fluxo de caixa e no extrato.
+      for (const chave of ['/contas-bancarias', 'saldos', 'fluxo-caixa', 'extrato']) queryClient.invalidateQueries({ queryKey: [chave] });
       avisarSucesso(conta ? 'Alterações salvas' : 'Conta cadastrada');
       aoFechar();
     },
@@ -94,6 +95,7 @@ function FormConta({ conta, aoFechar }: { conta: ContaBancaria | null; aoFechar:
 export function ContasBancarias() {
   const { pode } = useSessao();
   const queryClient = useQueryClient();
+  const navegar = useNavigate();
   const [editando, setEditando] = useState<ContaBancaria | 'nova' | null>(null);
   const [removendo, setRemovendo] = useState<ContaBancaria | null>(null);
   const contas = useQuery({ queryKey: ['/contas-bancarias'], queryFn: () => api.get<ContaBancaria[]>('/contas-bancarias') });
@@ -115,6 +117,7 @@ export function ContasBancarias() {
   });
 
   const escrever = pode('escreverCadastros');
+  const comAcoes = escrever || pode('verSaldos');
   return (
     <>
       <Cabecalho
@@ -148,7 +151,7 @@ export function ContasBancarias() {
                   <Table.Th ta="right">Saldo inicial</Table.Th>
                   {pode('verSaldos') && <Table.Th ta="right">Saldo atual</Table.Th>}
                   <Table.Th>Situação</Table.Th>
-                  {escrever && <Table.Th w={48} />}
+                  {comAcoes && <Table.Th w={48} />}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -175,23 +178,16 @@ export function ContasBancarias() {
                           {c.ativo ? 'Ativa' : 'Inativa'}
                         </Badge>
                       </Table.Td>
-                      {escrever && (
+                      {comAcoes && (
                         <Table.Td>
-                          <Menu position="bottom-end">
-                            <Menu.Target>
-                              <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${c.nome}`}>
-                                <IconDots size={18} />
-                              </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                              <Menu.Item onClick={() => setEditando(c)}>Editar</Menu.Item>
-                              {pode('remover') && (
-                                <Menu.Item color="red" onClick={() => setRemovendo(c)}>
-                                  Remover
-                                </Menu.Item>
-                              )}
-                            </Menu.Dropdown>
-                          </Menu>
+                          <MenuAcoes
+                            rotulo={c.nome}
+                            itens={[
+                              pode('verSaldos') && { texto: 'Ver extrato', aoClicar: () => navegar(`/extrato?conta=${c.id}`) },
+                              escrever && { texto: 'Editar', aoClicar: () => setEditando(c) },
+                              pode('remover') && { texto: 'Remover', aoClicar: () => setRemovendo(c), perigosa: true },
+                            ]}
+                          />
                         </Table.Td>
                       )}
                     </Table.Tr>

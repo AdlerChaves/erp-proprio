@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { FindOptionsWhere, Raw, Repository } from 'typeorm';
+import { FUSO } from '../../common/datas';
 import { FiltroAuditoriaDto } from './dto/filtro-auditoria.dto';
 import { RegistroAuditoria } from './registro-auditoria.entity';
 
@@ -49,11 +50,20 @@ export class AuditoriaService {
       recurso: filtro.recurso,
       recursoId: filtro.recursoId,
     };
-    const de = filtro.de && new Date(`${filtro.de}T00:00:00Z`);
-    const ate = filtro.ate && new Date(`${filtro.ate}T23:59:59.999Z`);
-    if (de && ate) where.criadoEm = Between(de, ate);
-    else if (de) where.criadoEm = MoreThanOrEqual(de);
-    else if (ate) where.criadoEm = LessThanOrEqual(ate);
+    // Os dias começam e terminam à meia-noite no fuso da empresa, não em UTC.
+    const { de, ate } = filtro;
+    if (de || ate) {
+      where.criadoEm = Raw(
+        (coluna) =>
+          [
+            de && `${coluna} >= (:de::date)::timestamp AT TIME ZONE :fuso`,
+            ate && `${coluna} < (:ate::date + 1)::timestamp AT TIME ZONE :fuso`,
+          ]
+            .filter(Boolean)
+            .join(' AND '),
+        { de, ate, fuso: FUSO },
+      );
+    }
 
     const limite = filtro.limite ?? 50;
     const [itens, total] = await this.repo.findAndCount({

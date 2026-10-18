@@ -58,3 +58,26 @@ export const STATUS_CONTA: Record<StatusConta, { rotulo: string; cor: string }> 
 /** Conta em aberto (total ou parcialmente) com vencimento já passado. */
 export const vencida = (status: StatusConta, vencimento: string) =>
   (status === 'ABERTA' || status === 'PARCIAL') && vencimento < hoje();
+
+/** Data e hora de um instante (ISO) no fuso do navegador: "05/03/2026 14:07". */
+export const dataHora = (instante: string) => dayjs(instante).format('DD/MM/YYYY HH:mm');
+
+/** Primeiro e último dia do mês da data, no formato da API. */
+export const mesDe = (dataIso: string) => ({
+  de: dayjs(dataIso).startOf('month').format('YYYY-MM-DD'),
+  ate: dayjs(dataIso).endOf('month').format('YYYY-MM-DD'),
+});
+
+/**
+ * Próximo código livre abaixo do pai, com a mesma quantidade de dígitos dos irmãos (2 se ainda não houver).
+ * Sem pai, sugere o próximo número de primeiro nível.
+ */
+export function proximoCodigo(codigoPai: string | null, existentes: string[]) {
+  const prefixo = codigoPai ? `${codigoPai}.` : '';
+  const filhos = existentes
+    .filter((c) => c.startsWith(prefixo) && !c.slice(prefixo.length).includes('.'))
+    .map((c) => c.slice(prefixo.length));
+  const largura = filhos.length ? Math.max(...filhos.map((f) => f.length)) : codigoPai ? 2 : 1;
+  const maior = filhos.reduce((m, f) => Math.max(m, Number(f)), 0);
+  return prefixo + String(maior + 1).padStart(largura, '0');
+}

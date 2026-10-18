@@ -125,3 +125,94 @@ export interface FluxoCaixa {
   saldoFinal: number;
   emAtraso: { receber: number; pagar: number };
 }
+
+export interface Empresa {
+  id: string;
+  razaoSocial: string;
+  nomeFantasia: string | null;
+  cnpj: string;
+  ativo: boolean;
+}
+
+export type TipoProduto = 'PRODUTO' | 'SERVICO';
+
+export interface Produto {
+  id: string;
+  codigo: string;
+  descricao: string;
+  tipo: TipoProduto;
+  unidade: string;
+  precoVenda: number;
+  custo: number | null;
+  ncm: string | null;
+  codigoServico: string | null;
+  ativo: boolean;
+}
+
+export type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
+export type OrigemMovimentacao = 'CONTA_RECEBER' | 'CONTA_PAGAR' | 'TRANSFERENCIA' | 'AVULSA';
+
+export interface Movimentacao {
+  id: string;
+  contaBancariaId: string;
+  data: string;
+  tipo: TipoMovimentacao;
+  valor: number;
+  descricao: string;
+  origem: OrigemMovimentacao;
+  baixaId: string | null;
+  transferenciaId: string | null;
+  planoContaId: string | null;
+  planoConta: PlanoConta | null;
+  centroCustoId: string | null;
+  centroCusto: CentroCusto | null;
+}
+
+export interface Extrato {
+  contaBancaria: { id: string; nome: string };
+  de: string;
+  ate: string;
+  saldoAnterior: number;
+  movimentacoes: (Movimentacao & { saldo: number })[];
+  saldoFinal: number;
+}
+
+export type RegimeDre = 'competencia' | 'caixa';
+
+export interface Dre {
+  de: string;
+  ate: string;
+  regime: RegimeDre;
+  contas: { id: string; codigo: string; nome: string; tipo: TipoPlanoConta; nivel: number; valor: number }[];
+  semCategoria: { receitas: number; despesas: number };
+  receitas: number;
+  despesas: number;
+  resultado: number;
+}
+
+export interface UsuarioDaEmpresa {
+  id: string;
+  nome: string;
+  email: string;
+  perfil: Perfil;
+  ativo: boolean;
+}
+
+export interface RegistroAuditoria {
+  id: string;
+  empresaId: string | null;
+  usuarioId: string | null;
+  acao: string;
+  recurso: string | null;
+  recursoId: string | null;
+  dados: Record<string, unknown> | null;
+  ip: string | null;
+  criadoEm: string;
+}
+
+export interface PaginaAuditoria {
+  itens: RegistroAuditoria[];
+  total: number;
+  limite: number;
+  deslocamento: number;
+}

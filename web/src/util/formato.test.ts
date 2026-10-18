@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { data, documento, lerDataBR, mesAno, moeda } from './formato';
+import { data, documento, lerDataBR, mesAno, moeda, proximoCodigo } from './formato';
 
 describe('formatos', () => {
   it('moeda em reais', () => {
@@ -33,5 +33,21 @@ describe('formatos', () => {
     expect(documento('12345678901')).toBe('123.456.789-01');
     expect(documento('11222333000181')).toBe('11.222.333/0001-81');
     expect(documento('123')).toBe('123');
+  });
+});
+
+describe('proximoCodigo', () => {
+  const plano = ['1', '1.01', '1.02', '2', '2.01', '2.01.01', '2.01.02', '2.02'];
+  it.each([
+    ['1', '1.03'],
+    ['2.01', '2.01.03'],
+    ['2.02', '2.02.01'],
+    [null, '3'],
+  ])('abaixo de %s sugere %s', (pai, esperado) => {
+    expect(proximoCodigo(pai, plano)).toBe(esperado);
+  });
+
+  it('não confunde 1.1 com filhos de 1.10', () => {
+    expect(proximoCodigo('1', ['1', '1.1', '1.10', '1.10.01'])).toBe('1.11');
   });
 });

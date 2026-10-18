@@ -88,6 +88,8 @@ function useInvalidar(config: ConfigContas) {
     queryClient.invalidateQueries({ queryKey: [config.rota] });
     queryClient.invalidateQueries({ queryKey: ['saldos'] });
     queryClient.invalidateQueries({ queryKey: ['fluxo-caixa'] });
+    queryClient.invalidateQueries({ queryKey: ['extrato'] });
+    queryClient.invalidateQueries({ queryKey: ['dre'] });
   };
 }
 

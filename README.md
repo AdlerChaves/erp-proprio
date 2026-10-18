@@ -37,8 +37,11 @@ npm run dev                # frontend em http://localhost:5173, com /api repassa
 
 React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
-- Telas: login, cadastro da empresa, escolha e troca de empresa, painel (saldos, fluxo de caixa de 6 meses, contas em atraso), contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento), clientes, fornecedores e contas bancárias.
-- Os botões aparecem conforme o perfil; quem decide de fato é a API.
+- Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
+- Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
+- Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo.
+- Administração: dados da empresa e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
+- Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
 - Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
 - `npm run typecheck`, `npm test` (Vitest) e `npm run build` dentro de `web/`.
 
@@ -114,7 +117,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | DELETE | `/api/movimentacoes/:id` | Remove avulsa ou as duas pernas de uma transferência |
 | GET | `/api/movimentacoes/saldos?data=` | Saldo de cada conta ao fim do dia (padrão: hoje) |
 | GET | `/api/movimentacoes/extrato?contaBancariaId=&de=&ate=` | Extrato com saldo anterior, saldo após cada linha e saldo final |
-| GET | `/api/auditoria?usuarioId=&recurso=&recursoId=&de=&ate=&limite=&deslocamento=` | Trilha de auditoria da empresa, mais recente primeiro (`ADMIN`) |
+| GET | `/api/auditoria?usuarioId=&recurso=&recursoId=&de=&ate=&limite=&deslocamento=` | Trilha de auditoria da empresa, mais recente primeiro; `de` e `ate` são dias no fuso `APP_TIMEZONE` (`ADMIN`) |
 | GET | `/api/financeiro/fluxo-caixa?de=&ate=&agrupamento=mes\|dia` | Realizado e previsto por período, saldo acumulado e contas em atraso |
 | GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa` | Resultado por categoria, somado até as contas sintéticas |
 
@@ -170,7 +173,7 @@ npm run test:e2e
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
 | `test/sessao-cookie.e2e-spec.ts` | Sessão em cookie httpOnly, CSRF nas escritas, troca de empresa, senha e logout |
-| `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria, cabeçalhos, CORS, limite por IP e segredo do JWT |
+| `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria (inclusive o filtro por dia no fuso da empresa), cabeçalhos, CORS, limite por IP e segredo do JWT |
 
 A cada push na `main` e em cada pull request, o GitHub Actions compila o projeto, aplica as migrations num PostgreSQL 16, confere se elas batem com as entidades e roda os testes e2e (`.github/workflows/ci.yml`).
 
