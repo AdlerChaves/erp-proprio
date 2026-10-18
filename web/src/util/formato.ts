@@ -90,3 +90,16 @@ export const qtd = (valor: number) => QUANTIDADE.format(valor);
 /** Total de um item em centavos, com o mesmo arredondamento da API: quantidade × preço − desconto. */
 export const totalItemCentavos = (quantidade: number, preco: number, desconto = 0) =>
   Math.round((Math.round(quantidade * 1000) * Math.round(preco * 100)) / 1000) - Math.round(desconto * 100);
+
+/** Confere os dígitos verificadores de um CPF (11 dígitos) ou CNPJ (14 dígitos). */
+export function documentoValido(valor: string) {
+  const d = digitos(valor);
+  if (!/^(\d{11}|\d{14})$/.test(d) || /^(\d)\1+$/.test(d)) return false;
+  const digito = (base: string, pesos: number[]) => {
+    const resto = base.split('').reduce((s, n, i) => s + Number(n) * pesos[i], 0) % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const pesos = d.length === 11 ? [11, 10, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const n = d.length;
+  return digito(d.slice(0, n - 2), pesos.slice(1)) === Number(d[n - 2]) && digito(d.slice(0, n - 1), pesos) === Number(d[n - 1]);
+}

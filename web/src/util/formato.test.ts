@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { data, documento, lerDataBR, mesAno, moeda, proximoCodigo, qtd, totalItemCentavos } from './formato';
+import { data, documento, lerDataBR, mesAno, moeda, proximoCodigo, qtd, totalItemCentavos, documentoValido } from './formato';
 
 describe('formatos', () => {
   it('moeda em reais', () => {
@@ -61,5 +61,18 @@ describe('itens', () => {
     expect(totalItemCentavos(1.5, 18.9)).toBe(2835);
     expect(totalItemCentavos(2, 80, 10.5)).toBe(14950);
     expect(totalItemCentavos(0.333, 0.1)).toBe(3);
+  });
+});
+
+describe('documentoValido', () => {
+  it.each([
+    ['11.222.333/0001-81', true],
+    ['11222333000182', false],
+    ['529.982.247-25', true],
+    ['52998224724', false],
+    ['00000000000000', false],
+    ['123', false],
+  ])('%s → %s', (doc, esperado) => {
+    expect(documentoValido(doc)).toBe(esperado);
   });
 });

@@ -4,11 +4,12 @@ import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api } from '../api/cliente';
-import type { Pessoa } from '../api/tipos';
+import type { DadosCnpj, Pessoa } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao, type Permissao } from '../sessao/sessao';
-import { digitos, documento } from '../util/formato';
+import { digitos, documento, documentoValido } from '../util/formato';
 
 export interface ConfigPessoas {
   rota: '/clientes' | '/fornecedores';
@@ -56,7 +57,12 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
     },
     validate: {
       nome: (v) => (v.trim() ? null : 'Informe o nome'),
-      documento: (v) => ([11, 14].includes(digitos(v).length) ? null : 'CPF (11 dígitos) ou CNPJ (14 dígitos)'),
+      documento: (v) =>
+        ![11, 14].includes(digitos(v).length)
+          ? 'CPF (11 dígitos) ou CNPJ (14 dígitos)'
+          : documentoValido(v)
+            ? null
+            : `${digitos(v).length === 11 ? 'CPF' : 'CNPJ'} com dígito verificador errado; confira o número`,
       email: (v) => (!v || /^\S+@\S+\.\S+$/.test(v) ? null : 'E-mail inválido'),
       telefone: (v) => (!v || digitos(v).length >= 8 ? null : 'Telefone incompleto'),
       // O endereço é opcional, mas, se começar a preencher, precisa ficar completo.
@@ -67,6 +73,26 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
       codigoMunicipio: (v, c) => (!temEndereco(c) || v ? null : 'Escolha o município'),
     },
   });
+  /** Preenche com o que a Receita informa; campos que ela não tem continuam como estavam. */
+  const preencher = (d: DadosCnpj) => {
+    const atual = form.values;
+    const ou = (novo: string | null | undefined, antigo: string) => (novo ? novo : antigo);
+    form.setValues({
+      nome: d.razaoSocial,
+      email: ou(d.email, atual.email),
+      telefone: ou(d.telefone, atual.telefone),
+      ...(config.dadosFiscais && {
+        cep: ou(d.endereco.cep && d.endereco.cep.replace(/(\d{5})(\d{3})/, '$1-$2'), atual.cep),
+        logradouro: ou(d.endereco.logradouro, atual.logradouro),
+        numero: ou(d.endereco.numero, atual.numero),
+        complemento: ou(d.endereco.complemento, atual.complemento),
+        bairro: ou(d.endereco.bairro, atual.bairro),
+        codigoMunicipio: d.endereco.codigoMunicipio ?? atual.codigoMunicipio,
+      }),
+    });
+  };
+  const cnpj = useBuscaCnpj(preencher);
+
   const salvar = useMutation({
     mutationFn: (v: typeof form.values) => {
       const corpo = {
@@ -103,7 +129,18 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
     <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
       <Stack>
         <TextInput label="Nome" data-autofocus {...form.getInputProps('nome')} />
-        <TextInput label="CPF ou CNPJ" {...form.getInputProps('documento')} />
+        <TextInput
+          label="CPF ou CNPJ"
+          description={pessoa ? undefined : 'Com um CNPJ válido, os dados da Receita Federal são preenchidos sozinhos'}
+          {...form.getInputProps('documento')}
+          onChange={(e) => {
+            form.getInputProps('documento').onChange(e);
+            // Num cadastro novo, busca sozinho ao completar o CNPJ; na edição, só pelo botão.
+            if (!pessoa) cnpj.automatico(e.currentTarget.value);
+          }}
+          rightSection={<BotaoBuscarCnpj cnpj={form.values.documento} buscando={cnpj.buscando} aoClicar={() => cnpj.buscar(form.values.documento)} />}
+        />
+        {cnpj.dados && digitos(form.values.documento) === cnpj.dados.cnpj && <ResumoCnpj dados={cnpj.dados} />}
         <TextInput label="E-mail" type="email" {...form.getInputProps('email')} />
         <TextInput label="Telefone" {...form.getInputProps('telefone')} />
         {config.dadosFiscais && (

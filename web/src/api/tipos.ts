@@ -371,3 +371,20 @@ export interface NotaServico {
   dataEmissaoNfse: string | null;
   motivoCancelamento: string | null;
 }
+
+/** Dados públicos do CNPJ (Receita Federal), já no formato do cadastro. */
+export interface DadosCnpj {
+  cnpj: string;
+  razaoSocial: string;
+  nomeFantasia: string | null;
+  situacao: string;
+  ativa: boolean;
+  email: string | null;
+  telefone: string | null;
+  endereco: Endereco & { complemento: string; codigoMunicipio: string | null };
+  municipio: { nome: string; uf: string } | null;
+  simplesNacional: boolean | null;
+  mei: boolean | null;
+  fonte: string;
+  consultadoEm: string;
+}

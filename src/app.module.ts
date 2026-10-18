@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CentrosCustoModule } from './modules/centros-custo/centros-custo.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { ComprasModule } from './modules/compras/compras.module';
+import { ConsultaCnpjModule } from './modules/consulta-cnpj/consulta-cnpj.module';
 import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancarias.module';
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
 import { ContasReceberModule } from './modules/contas-receber/contas-receber.module';
@@ -49,6 +50,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     VendasModule,
     ComprasModule,
     NfseModule,
+    ConsultaCnpjModule,
   ],
   controllers: [HealthController],
 })

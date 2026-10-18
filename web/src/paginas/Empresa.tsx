@@ -7,9 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
 import type { Empresa as DadosEmpresa, RegimeTributario } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, ErroCarregamento } from '../componentes/comum';
+import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
-import { digitos, documento } from '../util/formato';
+import { digitos, documento, documentoValido } from '../util/formato';
 import { PERFIS } from './Usuarios';
 
 function FormDados({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
@@ -86,6 +87,21 @@ function FormFiscal({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar
     },
   });
   const simples = form.values.regimeTributario === 'SIMPLES_NACIONAL';
+  // Município e regime pela Receita; o percentual do Simples e a inscrição municipal ela não informa.
+  const receita = useBuscaCnpj((d) => {
+    const regime: RegimeTributario | null = d.mei ? 'MEI' : d.simplesNacional ? 'SIMPLES_NACIONAL' : null;
+    form.setValues({
+      codigoMunicipio: d.endereco.codigoMunicipio ?? form.values.codigoMunicipio,
+      regimeTributario: regime ?? form.values.regimeTributario,
+    });
+    const preenchidos = [d.endereco.codigoMunicipio && 'município', regime && 'regime'].filter(Boolean);
+    avisarSucesso(
+      preenchidos.length
+        ? `${preenchidos.join(' e ')} preenchido${preenchidos.length > 1 ? 's' : ''} pela Receita; confira e salve`.replace(/^./, (l) => l.toUpperCase())
+        : 'A Receita não informou município nem opção pelo Simples para este CNPJ',
+    );
+    if (!regime && d.endereco.codigoMunicipio) avisarSucesso('A Receita não indica Simples nem MEI para este CNPJ; escolha o regime manualmente');
+  });
   const salvar = useMutation({
     mutationFn: (v: typeof form.values) =>
       api.patch<DadosEmpresa>('/empresas/atual', {
@@ -108,6 +124,17 @@ function FormFiscal({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar
   return (
     <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
       <Stack>
+        {podeEditar && (
+          <Group>
+            <Button size="xs" variant="light" loading={receita.buscando} onClick={() => receita.buscar(empresa.cnpj)}>
+              Preencher pela Receita Federal
+            </Button>
+            <Text size="xs" c="dimmed">
+              Traz o município e se a empresa é do Simples ou MEI, pelo CNPJ {documento(empresa.cnpj)}
+            </Text>
+          </Group>
+        )}
+        {receita.dados && !receita.dados.ativa && <ResumoCnpj dados={receita.dados} propria />}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label="Regime tributário" data={REGIMES} disabled={!podeEditar} {...form.getInputProps('regimeTributario')} />
           <TextInput label="Inscrição municipal" disabled={!podeEditar} {...form.getInputProps('inscricaoMunicipal')} />
@@ -167,9 +194,10 @@ function FormNovaEmpresa({ aoFechar }: { aoFechar: () => void }) {
     initialValues: { razaoSocial: '', nomeFantasia: '', cnpj: '' },
     validate: {
       razaoSocial: (v) => (v.trim() ? null : 'Informe a razão social'),
-      cnpj: (v) => (digitos(v).length === 14 ? null : 'O CNPJ tem 14 dígitos'),
+      cnpj: (v) => (digitos(v).length !== 14 ? 'O CNPJ tem 14 dígitos' : documentoValido(v) ? null : 'CNPJ com dígito verificador errado'),
     },
   });
+  const cnpj = useBuscaCnpj((d) => form.setValues({ razaoSocial: d.razaoSocial, nomeFantasia: d.nomeFantasia ?? '' }));
   const criar = useMutation({
     mutationFn: (v: typeof form.values) =>
       api.post<DadosEmpresa>('/empresas', { razaoSocial: v.razaoSocial.trim(), nomeFantasia: v.nomeFantasia.trim() || undefined, cnpj: digitos(v.cnpj) }),
@@ -189,9 +217,21 @@ function FormNovaEmpresa({ aoFechar }: { aoFechar: () => void }) {
         <Text size="sm" c="dimmed">
           A nova empresa começa com o plano de contas padrão e com você como administrador. Os dados de cada empresa ficam separados.
         </Text>
-        <TextInput label="Razão social" data-autofocus {...form.getInputProps('razaoSocial')} />
+        <TextInput
+          label="CNPJ"
+          placeholder="00.000.000/0000-00"
+          description="Com um CNPJ válido, a razão social vem da Receita Federal"
+          data-autofocus
+          {...form.getInputProps('cnpj')}
+          onChange={(e) => {
+            form.getInputProps('cnpj').onChange(e);
+            cnpj.automatico(e.currentTarget.value);
+          }}
+          rightSection={<BotaoBuscarCnpj cnpj={form.values.cnpj} buscando={cnpj.buscando} aoClicar={() => cnpj.buscar(form.values.cnpj)} />}
+        />
+        {cnpj.dados && digitos(form.values.cnpj) === cnpj.dados.cnpj && <ResumoCnpj dados={cnpj.dados} />}
+        <TextInput label="Razão social" {...form.getInputProps('razaoSocial')} />
         <TextInput label="Nome fantasia" description="Opcional" {...form.getInputProps('nomeFantasia')} />
-        <TextInput label="CNPJ" placeholder="00.000.000/0000-00" {...form.getInputProps('cnpj')} />
         <Group justify="flex-end">
           <Button variant="default" onClick={aoFechar}>
             Cancelar

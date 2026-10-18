@@ -38,6 +38,7 @@ npm run dev                # frontend em http://localhost:5173, com /api repassa
 React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
+- Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
@@ -129,6 +130,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET | `/api/notas-servico` · `/:id` · `/:id/xml` | Notas de serviço; o XML é a DPS validada contra o XSD oficial |
 | POST | `/api/notas-servico/:id/emissao` · `/:id/cancelamento` | Registra o número da NFS-e emitida no portal, ou cancela a nota (`ADMIN`/`FINANCEIRO`) |
 | GET | `/api/nfse/municipios?busca=&uf=` · `/api/nfse/servicos?busca=` | Municípios do IBGE e lista nacional de serviços, das tabelas oficiais |
+| GET | `/api/cnpj/:cnpj` | Dados públicos do CNPJ na Receita Federal (BrasilAPI, com a Minha Receita como reserva), no formato do cadastro |
 | GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
 | POST | `/api/estoque/ajustes` | Entrada ou saída manual com motivo (`ADMIN`/`FINANCEIRO`) |
@@ -169,6 +171,12 @@ Vendas, compras e estoque:
 - Vendas e compras são numeradas em sequência por empresa. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
 - Um produto que já movimentou estoque não pode virar serviço.
 
+Consulta de CNPJ:
+
+- A consulta passa pela API, nunca direto do navegador (a CSP só permite a própria origem). Fontes gratuitas dos dados abertos da Receita: BrasilAPI e, se ela falhar, Minha Receita. CNPJ inexistente responde 404; as duas fora do ar, 503 com orientação para preencher manualmente.
+- O CNPJ precisa ter dígitos verificadores válidos antes de qualquer consulta. Os resultados ficam em memória por 7 dias (a base pública é mensal), e há limite próprio por IP (`THROTTLE_CNPJ_LIMITE`, padrão 30 por minuto).
+- Endereço e nomes vêm como a Receita informa, em maiúsculas. CPF não tem consulta pública.
+
 Nota fiscal de serviço (NFS-e):
 
 - Segue o leiaute nacional da DPS, versão 1.01, com os esquemas XSD oficiais em `src/modules/nfse/esquemas` (ver o `LEIA-ME.md` de lá, inclusive a correção de um padrão do XSD oficial). Toda DPS é validada contra eles antes de ser gravada.
@@ -203,6 +211,7 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |
 | `test/vendas-estoque.e2e-spec.ts` | Custo médio, kardex, ciclo da venda, reservas, estoque negativo, cancelamentos, compras, numeração e operações simultâneas, perfis e isolamento |
