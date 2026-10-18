@@ -39,6 +39,16 @@ export function api(app: INestApplication, token?: string) {
 
 let sequencia = 0;
 
+/** CNPJ com dígitos verificadores corretos (a nota de serviço recusa CNPJ inválido). */
+export function cnpjValido(n: number) {
+  const d = String(n).padStart(12, '0').split('').map(Number);
+  for (const pesos of [[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]]) {
+    const resto = d.reduce((s, v, i) => s + v * pesos[i], 0) % 11;
+    d.push(resto < 2 ? 0 : 11 - resto);
+  }
+  return d.join('');
+}
+
 export interface Acesso {
   token: string;
   empresaId: string;
@@ -52,7 +62,7 @@ export async function registrarEmpresa(app: INestApplication): Promise<Acesso> {
   const email = `admin${n}@teste.com`;
   const res = await api(app)
     .post('/auth/registrar', {
-      empresa: { razaoSocial: `Empresa ${n}`, cnpj: String(n).padStart(14, '0') },
+      empresa: { razaoSocial: `Empresa ${n}`, cnpj: cnpjValido(n) },
       usuario: { nome: `Admin ${n}`, email, senha: SENHA },
     })
     .expect(201);

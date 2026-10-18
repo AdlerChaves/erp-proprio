@@ -11,6 +11,7 @@ import { ContasReceberService } from '../contas-receber/contas-receber.service';
 import { EstoqueService } from '../estoque/estoque.service';
 import { OrigemMovimentacaoEstoque, TipoMovimentacaoEstoque } from '../estoque/movimentacao-estoque.entity';
 import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
+import { NotaServico, StatusNotaServico } from '../nfse/nota-servico.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
 import { Produto, TipoProduto } from '../produtos/produto.entity';
 import { Perfil } from '../usuarios/perfil.enum';
@@ -180,6 +181,15 @@ export class VendasService {
         if (perfil !== Perfil.ADMIN && perfil !== Perfil.FINANCEIRO) {
           throw new ForbiddenException('Só administradores e o financeiro cancelam vendas faturadas');
         }
+        // Nota emitida precisa ser cancelada antes (aqui e no portal); a pendente cai junto com a venda.
+        if (await m.existsBy(NotaServico, { vendaId: id, status: StatusNotaServico.EMITIDA })) {
+          throw new BadRequestException(`A venda nº ${venda.numero} tem nota de serviço emitida; cancele a nota antes`);
+        }
+        await m.update(
+          NotaServico,
+          { vendaId: id, status: StatusNotaServico.PENDENTE },
+          { status: StatusNotaServico.CANCELADA, motivoCancelamento: 'Venda cancelada' },
+        );
         await this.contasReceber.cancelarDaOrigem(m, empresaId, { vendaId: id });
         avisos = await this.estoque.estornar(m, empresaId, { vendaId: id }, `Cancelamento da venda nº ${venda.numero}`);
       }

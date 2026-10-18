@@ -45,6 +45,16 @@ export class CreateProdutoDto {
   @Matches(/^\d{2}\.\d{2}$/, { message: 'codigoServico deve estar no formato 00.00 (LC 116)' })
   codigoServico?: string;
 
+  /** Só serviços: código de tributação nacional da NFS-e (6 dígitos, lista nacional), como 010701. */
+  @IsOptional()
+  @Matches(/^\d{6}$/, { message: 'codigoTributacaoNacional deve ter 6 dígitos' })
+  codigoTributacaoNacional?: string | null;
+
+  /** Só serviços: código NBS (9 dígitos). */
+  @IsOptional()
+  @Matches(/^\d{9}$/, { message: 'codigoNbs deve ter 9 dígitos' })
+  codigoNbs?: string | null;
+
   @IsOptional()
   @IsBoolean()
   ativo?: boolean;

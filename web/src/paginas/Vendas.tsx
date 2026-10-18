@@ -7,6 +7,7 @@ import { api, consulta } from '../api/cliente';
 import type { Pessoa, PosicaoEstoque, StatusVenda, Venda } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoData, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
 import { type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
+import { NotasDaVenda } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda, qtd } from '../util/formato';
 
@@ -170,6 +171,12 @@ function Detalhe({ id, aoEditar, aoFaturar }: { id: string; aoEditar: (v: Venda)
         contas={v.contas ?? []}
         vazio={v.status === 'CANCELADA' ? 'Nenhuma conta.' : 'As contas a receber são lançadas no faturamento.'}
       />
+      {v.status === 'FATURADA' && (
+        <>
+          <Divider label="Nota fiscal de serviço" labelPosition="left" />
+          <NotasDaVenda venda={v} />
+        </>
+      )}
       {vender && (
         <Group justify="flex-end" mt="sm">
           {podeCancelar && (

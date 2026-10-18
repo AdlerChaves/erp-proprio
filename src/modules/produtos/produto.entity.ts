@@ -62,6 +62,14 @@ export class Produto {
   @Column({ name: 'codigo_servico', type: 'varchar', length: 5, nullable: true })
   codigoServico: string | null;
 
+  /** Só para serviços: código de tributação nacional (cTribNac) da NFS-e, 6 dígitos, como 010701. */
+  @Column({ name: 'codigo_tributacao_nacional', type: 'varchar', length: 6, nullable: true })
+  codigoTributacaoNacional: string | null;
+
+  /** Só para serviços: código NBS de 9 dígitos (Nomenclatura Brasileira de Serviços). */
+  @Column({ name: 'codigo_nbs', type: 'varchar', length: 9, nullable: true })
+  codigoNbs: string | null;
+
   @Column({ default: true })
   ativo: boolean;
 

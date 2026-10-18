@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
@@ -22,6 +22,9 @@ export class EmpresasService {
   }
 
   async update(id: string, dto: UpdateEmpresaDto) {
+    if (dto.nfseSerie && Number(dto.nfseSerie) > 49999) {
+      throw new BadRequestException('A série da DPS para aplicativo próprio vai de 1 a 49999');
+    }
     const empresa = await this.findOne(id);
     return this.repo.save(this.repo.merge(empresa, dto));
   }

@@ -17,6 +17,7 @@ import { EstoqueModule } from './modules/estoque/estoque.module';
 import { FinanceiroModule } from './modules/financeiro/financeiro.module';
 import { FornecedoresModule } from './modules/fornecedores/fornecedores.module';
 import { MovimentacoesModule } from './modules/movimentacoes/movimentacoes.module';
+import { NfseModule } from './modules/nfse/nfse.module';
 import { PlanoContasModule } from './modules/plano-contas/plano-contas.module';
 import { ProdutosModule } from './modules/produtos/produtos.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
@@ -47,6 +48,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     EstoqueModule,
     VendasModule,
     ComprasModule,
+    NfseModule,
   ],
   controllers: [HealthController],
 })

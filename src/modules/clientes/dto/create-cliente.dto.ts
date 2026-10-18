@@ -1,4 +1,6 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, Length, Matches } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, Length, Matches, ValidateNested } from 'class-validator';
+import { EnderecoDto } from '../../../common/endereco.dto';
 
 export class CreateClienteDto {
   @IsNotEmpty()
@@ -15,6 +17,17 @@ export class CreateClienteDto {
   @IsOptional()
   @Length(8, 20)
   telefone?: string;
+
+  /** Inscrição municipal do tomador, se houver. Envie null para limpar. */
+  @IsOptional()
+  @Length(1, 15)
+  inscricaoMunicipal?: string | null;
+
+  /** Endereço no Brasil, usado na nota de serviço. Envie null para limpar. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EnderecoDto)
+  endereco?: EnderecoDto | null;
 
   @IsOptional()
   @IsBoolean()

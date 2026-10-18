@@ -22,12 +22,24 @@ export interface SessaoEntregue {
   csrfToken: string;
 }
 
+export interface Endereco {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento?: string;
+  bairro: string;
+  codigoMunicipio: string;
+}
+
 export interface Pessoa {
   id: string;
   nome: string;
   documento: string;
   email: string | null;
   telefone: string | null;
+  /** Só clientes: dados do tomador na nota de serviço. */
+  inscricaoMunicipal?: string | null;
+  endereco?: Endereco | null;
   ativo: boolean;
 }
 
@@ -126,12 +138,22 @@ export interface FluxoCaixa {
   emAtraso: { receber: number; pagar: number };
 }
 
+export type RegimeTributario = 'SIMPLES_NACIONAL' | 'MEI' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
+
 export interface Empresa {
   id: string;
   razaoSocial: string;
   nomeFantasia: string | null;
   cnpj: string;
   ativo: boolean;
+  inscricaoMunicipal: string | null;
+  codigoMunicipio: string | null;
+  regimeTributario: RegimeTributario | null;
+  regimeApuracaoSimples: number;
+  aliquotaSimples: number | null;
+  nfseSerie: string;
+  /** 1 = produção, 2 = homologação. */
+  nfseAmbiente: 1 | 2;
 }
 
 export type TipoProduto = 'PRODUTO' | 'SERVICO';
@@ -146,6 +168,8 @@ export interface Produto {
   custo: number | null;
   ncm: string | null;
   codigoServico: string | null;
+  codigoTributacaoNacional: string | null;
+  codigoNbs: string | null;
   /** Saldo físico; só produtos controlam estoque. */
   estoque: number;
   ativo: boolean;
@@ -306,4 +330,44 @@ export interface MovimentacaoEstoque {
   descricao: string;
   vendaId: string | null;
   compraId: string | null;
+}
+
+export interface Municipio {
+  codigo: string;
+  nome: string;
+  uf: string;
+}
+
+export interface ServicoNacional {
+  codigo: string;
+  descricao: string;
+}
+
+export type StatusNotaServico = 'PENDENTE' | 'EMITIDA' | 'CANCELADA';
+
+export interface NotaServico {
+  id: string;
+  vendaId: string | null;
+  venda: Venda | null;
+  clienteId: string;
+  cliente: Pessoa;
+  status: StatusNotaServico;
+  ambiente: 1 | 2;
+  serie: string;
+  numeroDps: number;
+  dataCompetencia: string;
+  geradaEm: string;
+  codigoTributacaoNacional: string;
+  codigoNbs: string | null;
+  municipioPrestacao: string;
+  descricao: string;
+  valorServicos: number;
+  descontoIncondicionado: number;
+  issRetido: boolean;
+  aliquotaIss: number | null;
+  numeroNfse: string | null;
+  codigoVerificacao: string | null;
+  chaveAcesso: string | null;
+  dataEmissaoNfse: string | null;
+  motivoCancelamento: string | null;
 }

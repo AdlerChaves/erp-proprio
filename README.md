@@ -38,6 +38,7 @@ npm run dev                # frontend em http://localhost:5173, com /api repassa
 React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
+- Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
 - Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo.
@@ -124,6 +125,10 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | POST | `/api/vendas/:id/faturamento` | Baixa o estoque e lança as contas a receber; devolve `avisos` de estoque negativo |
 | POST | `/api/vendas/:id/cancelamento` | Cancela; se faturada, devolve o estoque e cancela as contas (`ADMIN`/`FINANCEIRO`) |
 | POST | `/api/compras` · `/:id/recebimento` · `/:id/cancelamento` | Pedido de compra; o recebimento dá entrada no estoque e lança as contas a pagar |
+| POST | `/api/vendas/:id/notas-servico` | Gera a DPS (padrão nacional) dos serviços de uma venda faturada, uma por código de tributação nacional |
+| GET | `/api/notas-servico` · `/:id` · `/:id/xml` | Notas de serviço; o XML é a DPS validada contra o XSD oficial |
+| POST | `/api/notas-servico/:id/emissao` · `/:id/cancelamento` | Registra o número da NFS-e emitida no portal, ou cancela a nota (`ADMIN`/`FINANCEIRO`) |
+| GET | `/api/nfse/municipios?busca=&uf=` · `/api/nfse/servicos?busca=` | Municípios do IBGE e lista nacional de serviços, das tabelas oficiais |
 | GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
 | POST | `/api/estoque/ajustes` | Entrada ou saída manual com motivo (`ADMIN`/`FINANCEIRO`) |
@@ -164,6 +169,14 @@ Vendas, compras e estoque:
 - Vendas e compras são numeradas em sequência por empresa. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
 - Um produto que já movimentou estoque não pode virar serviço.
 
+Nota fiscal de serviço (NFS-e):
+
+- Segue o leiaute nacional da DPS, versão 1.01, com os esquemas XSD oficiais em `src/modules/nfse/esquemas` (ver o `LEIA-ME.md` de lá, inclusive a correção de um padrão do XSD oficial). Toda DPS é validada contra eles antes de ser gravada.
+- Por enquanto, só para empresas do **Simples Nacional** (ME/EPP) e **MEI**. Regras do Anexo I aplicadas: prestador sem nome e endereço quando é o emitente; no Simples com ISS apurado pelo Simples, alíquota só com ISS retido (de 2% a 5%); total de tributos pelo percentual do Simples (`pTotTribSN`) ou, no MEI, pelo indicador "não informar". O grupo IBS/CBS fica de fora: para o Simples ele só é obrigatório a partir de 2027.
+- A venda gera uma nota por código de tributação nacional, porque cada NFS-e descreve um serviço; produtos não entram (iriam em NF-e). O número da DPS é sequencial por empresa e nunca se repete.
+- Fluxo atual: gerar a DPS → emitir no portal da prefeitura (Várzea Paulista usa o NFE-Cidades) → registrar aqui o número da NFS-e. Venda com nota emitida só é cancelada depois de cancelar a nota; nota pendente é cancelada junto com a venda.
+- O CPF/CNPJ do cliente e o CNPJ da empresa precisam ter dígitos verificadores válidos.
+
 Relatórios:
 
 - **Fluxo de caixa**: contas bancárias abertas dentro do período entram com o saldo inicial no período da abertura (`aberturas`). Realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
@@ -190,6 +203,8 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
+| `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |
 | `test/vendas-estoque.e2e-spec.ts` | Custo médio, kardex, ciclo da venda, reservas, estoque negativo, cancelamentos, compras, numeração e operações simultâneas, perfis e isolamento |
 | `test/sessao-cookie.e2e-spec.ts` | Sessão em cookie httpOnly, CSRF nas escritas, troca de empresa, senha e logout |
 | `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria (inclusive o filtro por dia no fuso da empresa), cabeçalhos, CORS, limite por IP e segredo do JWT |

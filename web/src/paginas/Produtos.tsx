@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../api/cliente';
 import type { Produto, TipoProduto } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes, SituacaoAtivo } from '../componentes/comum';
+import { CampoServicoNacional } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { digitos, moeda } from '../util/formato';
 
@@ -26,6 +27,8 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
       custo: produto?.custo ?? ('' as number | ''),
       ncm: produto?.ncm ?? '',
       codigoServico: produto?.codigoServico ?? '',
+      codigoTributacaoNacional: produto?.codigoTributacaoNacional ?? (null as string | null),
+      codigoNbs: produto?.codigoNbs ?? '',
       ativo: produto?.ativo ?? true,
     },
     validate: {
@@ -35,6 +38,11 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
       precoVenda: (v) => (v !== '' && Number(v) >= 0 ? null : 'Informe o preço de venda'),
       ncm: (v, c) => (c.tipo !== 'PRODUTO' || !v || /^\d{8}$/.test(digitos(v)) ? null : 'O NCM tem 8 dígitos'),
       codigoServico: (v, c) => (c.tipo !== 'SERVICO' || !v || /^\d{2}\.\d{2}$/.test(v.trim()) ? null : 'Formato 00.00, como 01.07'),
+      codigoTributacaoNacional: (v, c) =>
+        c.tipo !== 'SERVICO' || !v || !c.codigoServico || v.startsWith(c.codigoServico.replace('.', ''))
+          ? null
+          : `Não corresponde ao item ${c.codigoServico} da LC 116`,
+      codigoNbs: (v, c) => (c.tipo !== 'SERVICO' || !v || /^\d{9}$/.test(digitos(v)) ? null : 'O NBS tem 9 dígitos'),
     },
   });
   const servico = form.values.tipo === 'SERVICO';
@@ -51,6 +59,8 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
         custo: v.custo === '' ? null : Number(v.custo),
         ncm: servico || !v.ncm ? null : digitos(v.ncm),
         codigoServico: !servico || !v.codigoServico ? null : v.codigoServico.trim(),
+        codigoTributacaoNacional: servico ? v.codigoTributacaoNacional : null,
+        codigoNbs: servico && v.codigoNbs ? digitos(v.codigoNbs) : null,
         ativo: v.ativo,
       };
       return produto ? api.patch(`/produtos/${produto.id}`, corpo) : api.post('/produtos', corpo);
@@ -77,6 +87,23 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
           )}
         </SimpleGrid>
         <TextInput label="Descrição" {...form.getInputProps('descricao')} />
+        {servico && (
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <CampoServicoNacional
+              label="Código de tributação nacional"
+              description="Lista nacional da NFS-e; necessário para emitir a nota"
+              style={{ gridColumn: 'span 2' }}
+              value={form.values.codigoTributacaoNacional}
+              onChange={(codigo) => {
+                form.setFieldValue('codigoTributacaoNacional', codigo);
+                // O código LC 116 (00.00) é o começo do código nacional; preenche se estiver vazio.
+                if (codigo && !form.values.codigoServico) form.setFieldValue('codigoServico', `${codigo.slice(0, 2)}.${codigo.slice(2, 4)}`);
+              }}
+              error={form.errors.codigoTributacaoNacional}
+            />
+            <TextInput label="NBS" description="9 dígitos, opcional" {...form.getInputProps('codigoNbs')} />
+          </SimpleGrid>
+        )}
         <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <CampoMoeda label="Preço de venda" {...form.getInputProps('precoVenda')} />
           <CampoMoeda label="Custo" description="Opcional" {...form.getInputProps('custo')} />

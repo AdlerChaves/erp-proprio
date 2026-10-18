@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { EnderecoDto as Endereco } from '../../common/endereco.dto';
 import { Empresa } from '../empresas/empresa.entity';
 
 @Entity('clientes')
@@ -35,6 +36,14 @@ export class Cliente {
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   telefone: string | null;
+
+  /** Indicador (inscrição) municipal do tomador, se houver. */
+  @Column({ name: 'inscricao_municipal', type: 'varchar', length: 15, nullable: true })
+  inscricaoMunicipal: string | null;
+
+  /** Endereço no Brasil; vai para o tomador na nota de serviço. */
+  @Column({ type: 'jsonb', nullable: true })
+  endereco: Endereco | null;
 
   @Column({ default: true })
   ativo: boolean;

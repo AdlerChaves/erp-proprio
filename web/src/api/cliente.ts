@@ -57,6 +57,23 @@ export async function requisitar<T>(metodo: string, rota: string, corpo?: unknow
   return dados as T;
 }
 
+/** Baixa um arquivo da API (ex.: XML da DPS) com o nome sugerido pelo servidor. */
+export async function baixarArquivo(rota: string, nomePadrao: string) {
+  const resposta = await fetch(`/api${rota}`, { headers: { 'X-Sessao': 'cookie' }, credentials: 'same-origin' });
+  if (!resposta.ok) {
+    const dados: unknown = await resposta.json().catch(() => null);
+    if (resposta.status === 401) aoExpirar();
+    throw new ApiError(resposta.status, mensagemDeErro(resposta.status, dados), dados);
+  }
+  const nome = resposta.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? nomePadrao;
+  const url = URL.createObjectURL(await resposta.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T>(rota: string) => requisitar<T>('GET', rota),
   post: <T>(rota: string, corpo: unknown = {}) => requisitar<T>('POST', rota, corpo),

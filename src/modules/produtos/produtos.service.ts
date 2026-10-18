@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EstoqueService } from '../estoque/estoque.service';
+import { servicoNacional } from '../nfse/catalogos';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { FiltroProdutoDto } from './dto/filtro-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
@@ -55,6 +56,19 @@ export class ProdutosService {
     }
     if (produto.tipo === TipoProduto.SERVICO && produto.ncm) {
       throw new BadRequestException('ncm só se aplica a produtos');
+    }
+    if (produto.tipo === TipoProduto.PRODUTO && (produto.codigoTributacaoNacional || produto.codigoNbs)) {
+      throw new BadRequestException('codigoTributacaoNacional e codigoNbs só se aplicam a serviços');
+    }
+    if (produto.codigoTributacaoNacional) {
+      if (!servicoNacional(produto.codigoTributacaoNacional)) {
+        throw new BadRequestException(`O código de tributação nacional ${produto.codigoTributacaoNacional} não existe na lista nacional de serviços`);
+      }
+      // O código LC 116 (00.00) é o começo do código nacional: 01.07 → 0107xx.
+      const item = produto.codigoServico?.replace('.', '');
+      if (item && !produto.codigoTributacaoNacional.startsWith(item)) {
+        throw new BadRequestException(`O código nacional ${produto.codigoTributacaoNacional} não corresponde ao item ${produto.codigoServico} da LC 116`);
+      }
     }
   }
 

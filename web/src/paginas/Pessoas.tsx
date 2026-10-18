@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Button, Card, Group, Loader, Menu, Modal, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Divider, Grid, Group, Loader, Menu, Modal, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,23 +6,36 @@ import { useMemo, useState } from 'react';
 import { api } from '../api/cliente';
 import type { Pessoa } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao, type Permissao } from '../sessao/sessao';
 import { digitos, documento } from '../util/formato';
 
 export interface ConfigPessoas {
   rota: '/clientes' | '/fornecedores';
   titulo: string;
+  /** Clientes são tomadores na nota de serviço: pedem endereço e inscrição municipal. */
+  dadosFiscais?: boolean;
   singular: string;
   permissaoEscrita: Permissao;
 }
 
-export const CLIENTES: ConfigPessoas = { rota: '/clientes', titulo: 'Clientes', singular: 'cliente', permissaoEscrita: 'escreverClientes' };
+export const CLIENTES: ConfigPessoas = {
+  rota: '/clientes',
+  titulo: 'Clientes',
+  singular: 'cliente',
+  permissaoEscrita: 'escreverClientes',
+  dadosFiscais: true,
+};
 export const FORNECEDORES: ConfigPessoas = {
   rota: '/fornecedores',
   titulo: 'Fornecedores',
   singular: 'fornecedor',
   permissaoEscrita: 'escreverCadastros',
 };
+
+/** Algum campo de endereço preenchido. */
+const temEndereco = (c: { cep: string; logradouro: string; numero: string; bairro: string; codigoMunicipio: string | null }) =>
+  !!(digitos(c.cep) || c.logradouro.trim() || c.numero.trim() || c.bairro.trim() || c.codigoMunicipio);
 
 function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pessoa: Pessoa | null; aoFechar: () => void }) {
   const queryClient = useQueryClient();
@@ -33,12 +46,25 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
       email: pessoa?.email ?? '',
       telefone: pessoa?.telefone ?? '',
       ativo: pessoa?.ativo ?? true,
+      inscricaoMunicipal: pessoa?.inscricaoMunicipal ?? '',
+      cep: pessoa?.endereco?.cep.replace(/(\d{5})(\d{3})/, '$1-$2') ?? '',
+      logradouro: pessoa?.endereco?.logradouro ?? '',
+      numero: pessoa?.endereco?.numero ?? '',
+      complemento: pessoa?.endereco?.complemento ?? '',
+      bairro: pessoa?.endereco?.bairro ?? '',
+      codigoMunicipio: pessoa?.endereco?.codigoMunicipio ?? (null as string | null),
     },
     validate: {
       nome: (v) => (v.trim() ? null : 'Informe o nome'),
       documento: (v) => ([11, 14].includes(digitos(v).length) ? null : 'CPF (11 dígitos) ou CNPJ (14 dígitos)'),
       email: (v) => (!v || /^\S+@\S+\.\S+$/.test(v) ? null : 'E-mail inválido'),
       telefone: (v) => (!v || digitos(v).length >= 8 ? null : 'Telefone incompleto'),
+      // O endereço é opcional, mas, se começar a preencher, precisa ficar completo.
+      cep: (v, c) => (!temEndereco(c) || digitos(v).length === 8 ? null : 'CEP com 8 dígitos'),
+      logradouro: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe a rua'),
+      numero: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe o número (ou S/N)'),
+      bairro: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe o bairro'),
+      codigoMunicipio: (v, c) => (!temEndereco(c) || v ? null : 'Escolha o município'),
     },
   });
   const salvar = useMutation({
@@ -49,6 +75,19 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
         email: v.email.trim() || undefined,
         telefone: digitos(v.telefone) || undefined,
         ativo: v.ativo,
+        ...(config.dadosFiscais && {
+          inscricaoMunicipal: v.inscricaoMunicipal.trim() || null,
+          endereco: temEndereco(v)
+            ? {
+                cep: digitos(v.cep),
+                logradouro: v.logradouro.trim(),
+                numero: v.numero.trim(),
+                complemento: v.complemento.trim() || undefined,
+                bairro: v.bairro.trim(),
+                codigoMunicipio: v.codigoMunicipio,
+              }
+            : null,
+        }),
       };
       return pessoa ? api.patch(`${config.rota}/${pessoa.id}`, corpo) : api.post(config.rota, corpo);
     },
@@ -67,6 +106,34 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
         <TextInput label="CPF ou CNPJ" {...form.getInputProps('documento')} />
         <TextInput label="E-mail" type="email" {...form.getInputProps('email')} />
         <TextInput label="Telefone" {...form.getInputProps('telefone')} />
+        {config.dadosFiscais && (
+          <>
+            <Divider label="Para a nota fiscal de serviço (opcional)" labelPosition="left" />
+            <Grid>
+              <Grid.Col span={{ base: 12, sm: 4 }}>
+                <TextInput label="CEP" placeholder="00000-000" {...form.getInputProps('cep')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 8 }}>
+                <CampoMunicipio label="Município" {...form.getInputProps('codigoMunicipio')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 8 }}>
+                <TextInput label="Rua" {...form.getInputProps('logradouro')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 4 }}>
+                <TextInput label="Número" {...form.getInputProps('numero')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <TextInput label="Complemento" {...form.getInputProps('complemento')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <TextInput label="Bairro" {...form.getInputProps('bairro')} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <TextInput label="Inscrição municipal" {...form.getInputProps('inscricaoMunicipal')} />
+              </Grid.Col>
+            </Grid>
+          </>
+        )}
         <Switch label="Ativo" {...form.getInputProps('ativo', { type: 'checkbox' })} />
         <Group justify="flex-end">
           <Button variant="default" onClick={aoFechar}>
@@ -202,6 +269,7 @@ export function Pessoas({ config }: { config: ConfigPessoas }) {
         opened={editando !== null}
         onClose={() => setEditando(null)}
         title={editando === 'nova' ? `Novo ${config.singular}` : `Editar ${config.singular}`}
+        size={config.dadosFiscais ? 'lg' : 'md'}
       >
         {editando !== null && (
           <FormPessoa config={config} pessoa={editando === 'nova' ? null : editando} aoFechar={() => setEditando(null)} />

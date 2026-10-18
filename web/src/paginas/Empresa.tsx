@@ -1,12 +1,13 @@
-import { Badge, Button, Card, Group, Loader, Modal, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Loader, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
-import type { Empresa as DadosEmpresa } from '../api/tipos';
+import type { Empresa as DadosEmpresa, RegimeTributario } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, ErroCarregamento } from '../componentes/comum';
+import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { digitos, documento } from '../util/formato';
 import { PERFIS } from './Usuarios';
@@ -39,6 +40,114 @@ function FormDados({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar:
           <TextInput label="Nome fantasia" description="Aparece no topo da tela" disabled={!podeEditar} {...form.getInputProps('nomeFantasia')} />
           <TextInput label="CNPJ" value={documento(empresa.cnpj)} disabled description="Não pode ser alterado" readOnly />
         </SimpleGrid>
+        {podeEditar && (
+          <Group justify="flex-end">
+            <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
+              Salvar
+            </Button>
+          </Group>
+        )}
+      </Stack>
+    </form>
+  );
+}
+
+const REGIMES: { value: RegimeTributario; label: string }[] = [
+  { value: 'SIMPLES_NACIONAL', label: 'Simples Nacional (ME/EPP)' },
+  { value: 'MEI', label: 'MEI' },
+  { value: 'LUCRO_PRESUMIDO', label: 'Lucro Presumido' },
+  { value: 'LUCRO_REAL', label: 'Lucro Real' },
+];
+
+const APURACAO = [
+  { value: '1', label: 'Tributos federais e ISS pelo Simples (padrão)' },
+  { value: '2', label: 'Federais pelo Simples; ISS pela prefeitura' },
+  { value: '3', label: 'Tudo fora do Simples (sublimite ultrapassado)' },
+];
+
+/** Dados que vão na nota de serviço (DPS). */
+function FormFiscal({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
+  const queryClient = useQueryClient();
+  const valoresDe = (e: DadosEmpresa) => ({
+    inscricaoMunicipal: e.inscricaoMunicipal ?? '',
+    codigoMunicipio: e.codigoMunicipio,
+    regimeTributario: e.regimeTributario,
+    regimeApuracaoSimples: String(e.regimeApuracaoSimples),
+    aliquotaSimples: e.aliquotaSimples ?? ('' as number | ''),
+    nfseSerie: e.nfseSerie,
+    nfseAmbiente: String(e.nfseAmbiente),
+  });
+  const form = useForm({
+    initialValues: valoresDe(empresa),
+    validate: {
+      nfseSerie: (v) => (/^\d{1,5}$/.test(v) && Number(v) >= 1 && Number(v) <= 49999 ? null : 'De 1 a 49999'),
+      aliquotaSimples: (v, c) =>
+        c.regimeTributario !== 'SIMPLES_NACIONAL' || v === '' || (Number(v) > 0 && Number(v) < 100) ? null : 'Entre 0 e 100%',
+    },
+  });
+  const simples = form.values.regimeTributario === 'SIMPLES_NACIONAL';
+  const salvar = useMutation({
+    mutationFn: (v: typeof form.values) =>
+      api.patch<DadosEmpresa>('/empresas/atual', {
+        inscricaoMunicipal: v.inscricaoMunicipal.trim() || null,
+        codigoMunicipio: v.codigoMunicipio,
+        regimeTributario: v.regimeTributario,
+        regimeApuracaoSimples: Number(v.regimeApuracaoSimples),
+        aliquotaSimples: v.aliquotaSimples === '' ? null : Number(v.aliquotaSimples),
+        nfseSerie: v.nfseSerie,
+        nfseAmbiente: Number(v.nfseAmbiente),
+      }),
+    onSuccess: (atualizada) => {
+      queryClient.setQueryData(['/empresas/atual'], atualizada);
+      form.resetDirty(valoresDe(atualizada));
+      avisarSucesso('Dados fiscais salvos');
+    },
+    onError: avisarErro,
+  });
+
+  return (
+    <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
+      <Stack>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select label="Regime tributário" data={REGIMES} disabled={!podeEditar} {...form.getInputProps('regimeTributario')} />
+          <TextInput label="Inscrição municipal" disabled={!podeEditar} {...form.getInputProps('inscricaoMunicipal')} />
+          <CampoMunicipio label="Município do cadastro" description="É o município emissor da nota" disabled={!podeEditar} {...form.getInputProps('codigoMunicipio')} />
+          {simples && (
+            <NumberInput
+              label="Tributos aproximados do Simples (%)"
+              description="Alíquota efetiva da sua faixa; vai na nota como total aproximado de tributos"
+              decimalSeparator=","
+              decimalScale={2}
+              suffix=" %"
+              hideControls
+              disabled={!podeEditar}
+              {...form.getInputProps('aliquotaSimples')}
+            />
+          )}
+          {simples && (
+            <Select label="Apuração no Simples" data={APURACAO} allowDeselect={false} disabled={!podeEditar} {...form.getInputProps('regimeApuracaoSimples')} />
+          )}
+          <TextInput label="Série da DPS" description="De 1 a 49999" disabled={!podeEditar} {...form.getInputProps('nfseSerie')} />
+        </SimpleGrid>
+        <div>
+          <Text size="sm" fw={500} mb={4}>
+            Ambiente
+          </Text>
+          <SegmentedControl
+            disabled={!podeEditar}
+            data={[
+              { value: '2', label: 'Homologação (testes)' },
+              { value: '1', label: 'Produção' },
+            ]}
+            {...form.getInputProps('nfseAmbiente')}
+          />
+          <Text size="xs" c="dimmed" mt={4}>
+            Vale para o envio automático, quando ele for ligado. Hoje a nota é emitida no portal da prefeitura.
+          </Text>
+        </div>
+        {form.values.regimeTributario && !simples && form.values.regimeTributario !== 'MEI' && (
+          <Alert color="yellow">Por enquanto, o ERP só gera notas de serviço para empresas do Simples Nacional e MEI.</Alert>
+        )}
         {podeEditar && (
           <Group justify="flex-end">
             <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
@@ -133,6 +242,14 @@ export function Empresa() {
           ) : (
             <FormDados key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />
           )}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Dados fiscais</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            Usados na nota fiscal de serviço
+          </Text>
+          {empresa.data && <FormFiscal key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
         </Card>
 
         <Card withBorder padding={0}>

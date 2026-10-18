@@ -7,6 +7,7 @@ import {
   IconBuildingWarehouse,
   IconChartBar,
   IconChevronDown,
+  IconFileInvoice,
   IconFileSpreadsheet,
   IconHistory,
   IconHome,
@@ -44,6 +45,7 @@ const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
       { rota: '/vendas', rotulo: 'Vendas', icone: IconShoppingBag },
       { rota: '/compras', rotulo: 'Compras', icone: IconShoppingCart, permissao: 'verSaldos' },
       { rota: '/estoque', rotulo: 'Estoque', icone: IconBuildingWarehouse },
+      { rota: '/notas-servico', rotulo: 'Notas de serviço', icone: IconFileInvoice },
     ],
   },
   {
