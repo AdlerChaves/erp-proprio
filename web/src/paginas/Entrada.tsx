@@ -12,7 +12,7 @@ function Moldura({ titulo, subtitulo, children }: { titulo: string; subtitulo: s
     <Center mih="100vh" bg="gray.0" p="md">
       <Box w="100%" maw={420}>
         <Title order={2} ta="center" c="teal.7">
-          ERP Próprio
+          Relda ERP
         </Title>
         <Text ta="center" c="dimmed" mb="lg">
           {subtitulo}

@@ -112,7 +112,7 @@ export function Layout() {
           <Group gap="sm" wrap="nowrap">
             <Burger opened={aberto} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Abrir menu" />
             <Text fw={700} c="teal.7" visibleFrom="xs">
-              ERP Próprio
+              Relda ERP
             </Text>
             {me.empresas.length > 1 ? (
               <Select
