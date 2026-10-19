@@ -2,6 +2,8 @@ import { Center, Loader } from '@mantine/core';
 import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom';
 import { Layout } from './layout/Layout';
 import { Auditoria } from './paginas/Auditoria';
+import { CartaoDetalhe } from './paginas/CartaoDetalhe';
+import { Cartoes } from './paginas/Cartoes';
 import { CentrosCusto } from './paginas/CentrosCusto';
 import { Compras } from './paginas/Compras';
 import { ContasBancarias } from './paginas/ContasBancarias';
@@ -65,6 +67,8 @@ export const rotas = createBrowserRouter([
           { path: '/compras', element: <Compras /> },
           { path: '/estoque', element: <Estoque /> },
           { path: '/notas-servico', element: <NotasServico /> },
+          { path: '/cartoes', element: <Cartoes /> },
+          { path: '/cartoes/:id', element: <CartaoDetalhe /> },
           { path: '/extrato', element: <Extrato /> },
           { path: '/dre', element: <Dre /> },
           { path: '/produtos', element: <Produtos /> },

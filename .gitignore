@@ -3,3 +3,7 @@ dist/
 .env
 *.tsbuildinfo
 coverage/
+
+# Backups do banco (pg_dump): têm dados reais da empresa
+backup-*.sql
+*.dump

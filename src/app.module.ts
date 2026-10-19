@@ -6,6 +6,7 @@ import { databaseOptions } from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CartoesModule } from './modules/cartoes/cartoes.module';
 import { CentrosCustoModule } from './modules/centros-custo/centros-custo.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { ComprasModule } from './modules/compras/compras.module';
@@ -51,6 +52,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     ComprasModule,
     NfseModule,
     ConsultaCnpjModule,
+    CartoesModule,
   ],
   controllers: [HealthController],
 })

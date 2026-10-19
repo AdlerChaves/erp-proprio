@@ -111,6 +111,8 @@ export interface ContaFinanceira {
   cliente?: Pessoa;
   fornecedorId?: string;
   fornecedor?: Pessoa;
+  /** Conta a pagar que é a fatura de um cartão: mantida pelo cartão, não editada à mão. */
+  faturaCartaoId?: string | null;
 }
 
 export interface Saldos {
@@ -387,4 +389,57 @@ export interface DadosCnpj {
   mei: boolean | null;
   fonte: string;
   consultadoEm: string;
+}
+
+export interface CartaoCredito {
+  id: string;
+  nome: string;
+  final: string | null;
+  contaBancariaId: string;
+  contaBancaria: ContaBancaria;
+  fornecedorId: string;
+  fornecedor: Pessoa;
+  diaFechamento: number;
+  diaVencimento: number;
+  limite: number | null;
+  ativo: boolean;
+  /** Competência (AAAA-MM) que recebe as compras de hoje. */
+  faturaAtual: string;
+  limiteUsado: number;
+  limiteDisponivel: number | null;
+}
+
+export type TipoLancamentoCartao = 'COMPRA' | 'ESTORNO';
+
+export interface LancamentoCartao {
+  id: string;
+  compraId: string;
+  faturaId: string;
+  data: string;
+  descricao: string;
+  tipo: TipoLancamentoCartao;
+  valor: number;
+  parcela: number | null;
+  totalParcelas: number | null;
+  planoContaId: string | null;
+  planoConta: PlanoConta | null;
+  centroCustoId: string | null;
+  centroCusto: CentroCusto | null;
+  fornecedorId: string | null;
+  fornecedor: Pessoa | null;
+  fatura?: { competencia: string };
+}
+
+export interface FaturaCartao {
+  id: string | null;
+  competencia: string;
+  dataFechamento: string;
+  dataVencimento: string;
+  inicioPeriodo: string;
+  datasAjustadas: boolean;
+  status: 'ABERTA' | 'FECHADA';
+  total: number;
+  pago: number;
+  contaPagar: { id: string; status: StatusConta; valor: number } | null;
+  lancamentos: LancamentoCartao[];
 }

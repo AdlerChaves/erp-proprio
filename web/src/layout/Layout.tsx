@@ -7,6 +7,7 @@ import {
   IconBuildingWarehouse,
   IconChartBar,
   IconChevronDown,
+  IconCreditCard,
   IconFileInvoice,
   IconFileSpreadsheet,
   IconHistory,
@@ -53,6 +54,7 @@ const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
     itens: [
       { rota: '/contas-receber', rotulo: 'Contas a receber', icone: IconReceipt },
       { rota: '/contas-pagar', rotulo: 'Contas a pagar', icone: IconReceiptRefund },
+      { rota: '/cartoes', rotulo: 'Cartões de crédito', icone: IconCreditCard, permissao: 'verSaldos' },
       { rota: '/extrato', rotulo: 'Extrato bancário', icone: IconFileSpreadsheet, permissao: 'verSaldos' },
       { rota: '/dre', rotulo: 'DRE', icone: IconChartBar, permissao: 'verSaldos' },
     ],

@@ -38,6 +38,7 @@ npm run dev                # frontend em http://localhost:5173, com /api repassa
 React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e React Router.
 
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
+- Cartões de crédito: cartão ligado a uma conta bancária e ao emissor; lançamentos (à vista, parcelados e estornos) por fatura, com datas de fechamento e vencimento ajustáveis mês a mês, fechamento conferido com o banco e pagamento pela conta a pagar da fatura.
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
@@ -130,6 +131,10 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET | `/api/notas-servico` · `/:id` · `/:id/xml` | Notas de serviço; o XML é a DPS validada contra o XSD oficial |
 | POST | `/api/notas-servico/:id/emissao` · `/:id/cancelamento` | Registra o número da NFS-e emitida no portal, ou cancela a nota (`ADMIN`/`FINANCEIRO`) |
 | GET | `/api/nfse/municipios?busca=&uf=` · `/api/nfse/servicos?busca=` | Municípios do IBGE e lista nacional de serviços, das tabelas oficiais |
+| GET/POST/PATCH/DELETE | `/api/cartoes` · `/:id` | Cartões de crédito, com limite usado e a fatura atual (`ADMIN`/`FINANCEIRO` escrevem; `VENDAS` não acessa) |
+| GET/PATCH | `/api/cartoes/:id/faturas/:competencia` | Fatura do mês de vencimento AAAA-MM; o PATCH ajusta fechamento e vencimento e redistribui as compras |
+| POST | `/api/cartoes/:id/faturas/:competencia/fechamento` · `/reabertura` | Fecha a fatura conferida com o banco, ou reabre se não houver pagamento |
+| POST/PATCH/DELETE | `/api/cartoes/:id/lancamentos` · `/:lancamentoId` | Compra (parcelada ou não) ou estorno; a alteração muda descrição e classificação; a exclusão remove a compra inteira |
 | GET | `/api/cnpj/:cnpj` | Dados públicos do CNPJ na Receita Federal (BrasilAPI, com a Minha Receita como reserva), no formato do cadastro |
 | GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
@@ -171,6 +176,14 @@ Vendas, compras e estoque:
 - Vendas e compras são numeradas em sequência por empresa. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
 - Um produto que já movimentou estoque não pode virar serviço.
 
+Cartões de crédito:
+
+- Cada fatura é identificada pelo mês do vencimento. As datas padrão vêm dos dias do cartão (se o dia do fechamento é maior que o do vencimento, a fatura fecha no mês anterior; dia inexistente vira o último do mês) e podem ser ajustadas em cada fatura aberta para bater com o banco. Mudar os dias do cartão atualiza as faturas abertas sem ajuste manual.
+- A compra entra na primeira fatura cujo fechamento é depois da data dela: comprar no dia do fechamento vai para a fatura seguinte. Ao mudar um fechamento, as compras das faturas abertas são redistribuídas; parceladas levam uma parcela por fatura, a partir da fatura da compra.
+- A conta a pagar da fatura nasce na primeira compra e acompanha o total (compras − estornos) e o vencimento. Ela não é editada nem cancelada em contas a pagar; fatura zerada não tem conta. Com pagamento registrado, a fatura não muda.
+- Fechar a fatura trava lançamentos e datas; reabrir só sem pagamento. A descrição e a classificação podem mudar a qualquer momento.
+- Na DRE por competência, cada compra entra na sua categoria pela data da compra (estorno desconta) e a conta da fatura fica de fora, para não contar duas vezes. Por caixa, o pagamento da fatura é dividido entre as categorias das compras, na proporção do valor de cada uma.
+
 Consulta de CNPJ:
 
 - A consulta passa pela API, nunca direto do navegador (a CSP só permite a própria origem). Fontes gratuitas dos dados abertos da Receita: BrasilAPI e, se ela falhar, Minha Receita. CNPJ inexistente responde 404; as duas fora do ar, 503 com orientação para preencher manualmente.
@@ -211,6 +224,7 @@ npm run test:e2e
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
 | `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |

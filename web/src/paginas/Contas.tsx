@@ -193,12 +193,23 @@ function FormConta({ config, conta, aoFechar }: { config: ConfigContas; conta: C
   );
 }
 
-function FormBaixa({ config, conta, aoFechar }: { config: ConfigContas; conta: ContaFinanceira; aoFechar: () => void }) {
+/** Pagamento (ou recebimento) de uma conta; também usado para pagar a fatura do cartão. */
+export function FormBaixa({
+  config,
+  conta,
+  aoFechar,
+  contaBancariaPadrao = '',
+}: {
+  config: ConfigContas;
+  conta: ContaFinanceira;
+  aoFechar: () => void;
+  contaBancariaPadrao?: string;
+}) {
   const apoio = useApoio(config);
   const invalidar = useInvalidar(config);
   const form = useForm({
     initialValues: {
-      contaBancariaId: '',
+      contaBancariaId: contaBancariaPadrao,
       valor: conta.saldo as number | '',
       juros: 0 as number | '',
       multa: 0 as number | '',
@@ -471,10 +482,19 @@ export function Contas({ config }: { config: ConfigContas }) {
                         <Text size="sm" style={{ cursor: 'pointer' }} onClick={() => setDetalhe(c)} td="underline" c="teal.8">
                           {c.descricao}
                         </Text>
+                        {c.faturaCartaoId && (
+                          <Badge size="xs" variant="outline" color="grape">
+                            Cartão
+                          </Badge>
+                        )}
                       </Table.Td>
                       <Table.Td>{c[config.pessoa.relacao]?.nome}</Table.Td>
                       <Table.Td>
-                        {c.planoConta ? (
+                        {c.faturaCartaoId ? (
+                          <Text size="sm" c="dimmed">
+                            Por compra, no cartão
+                          </Text>
+                        ) : c.planoConta ? (
                           <Text size="sm" lineClamp={1}>
                             {c.planoConta.nome}
                           </Text>
@@ -503,8 +523,8 @@ export function Contas({ config }: { config: ConfigContas }) {
                           <Menu.Dropdown>
                             <Menu.Item onClick={() => setDetalhe(c)}>Detalhes e pagamentos</Menu.Item>
                             {escrever && emAberto && <Menu.Item onClick={() => setBaixando(c)}>{config.verbo}</Menu.Item>}
-                            {escrever && <Menu.Item onClick={() => setEditando(c)}>Editar</Menu.Item>}
-                            {escrever && c.status === 'ABERTA' && (
+                            {escrever && !c.faturaCartaoId && <Menu.Item onClick={() => setEditando(c)}>Editar</Menu.Item>}
+                            {escrever && c.status === 'ABERTA' && !c.faturaCartaoId && (
                               <Menu.Item color="red" onClick={() => setCancelando(c)}>
                                 Cancelar conta
                               </Menu.Item>

@@ -39,6 +39,25 @@ const SQL_EM_ABERTO = (tabela: 'contas_receber' | 'contas_pagar', chave: 'conta_
     FROM ${tabela} c
    WHERE c.empresa_id = $1 AND c.status IN ('ABERTA', 'PARCIAL')`;
 
+/**
+ * DRE por caixa: o pagamento de uma fatura de cartão é dividido entre as categorias das compras dela,
+ * na proporção do valor líquido (compras − estornos) de cada categoria.
+ */
+const SQL_PAGAMENTO_FATURAS_POR_CATEGORIA = `
+  WITH pagamentos AS (
+         SELECT c.fatura_cartao_id AS fatura_id, SUM(b.valor_total) AS pago
+           FROM baixas b JOIN contas_pagar c ON c.id = b.conta_pagar_id
+          WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NOT NULL
+          GROUP BY c.fatura_cartao_id),
+       por_categoria AS (
+         SELECT fatura_id, plano_conta_id, SUM(CASE WHEN tipo = 'ESTORNO' THEN -valor ELSE valor END) AS liquido
+           FROM lancamentos_cartao WHERE fatura_id IN (SELECT fatura_id FROM pagamentos)
+          GROUP BY fatura_id, plano_conta_id),
+       totais AS (SELECT fatura_id, SUM(liquido) AS total FROM por_categoria GROUP BY fatura_id)
+  SELECT pc.plano_conta_id, p.pago * pc.liquido / t.total AS valor
+    FROM pagamentos p JOIN por_categoria pc USING (fatura_id) JOIN totais t USING (fatura_id)
+   WHERE t.total > 0`;
+
 interface Linha {
   data: string;
   valor: string;
@@ -146,14 +165,23 @@ export class RelatoriosService {
             WHERE empresa_id = $1 AND status <> 'CANCELADA' AND data_emissao BETWEEN $2 AND $3 GROUP BY plano_conta_id
            UNION ALL
            SELECT 'DESPESA', plano_conta_id, SUM(valor) FROM contas_pagar
-            WHERE empresa_id = $1 AND status <> 'CANCELADA' AND data_emissao BETWEEN $2 AND $3 GROUP BY plano_conta_id`
+            WHERE empresa_id = $1 AND status <> 'CANCELADA' AND data_emissao BETWEEN $2 AND $3
+              AND fatura_cartao_id IS NULL
+            GROUP BY plano_conta_id
+           UNION ALL
+           SELECT 'DESPESA', plano_conta_id, SUM(CASE WHEN tipo = 'ESTORNO' THEN -valor ELSE valor END) FROM lancamentos_cartao
+            WHERE empresa_id = $1 AND data BETWEEN $2 AND $3 GROUP BY plano_conta_id`
         : `SELECT 'RECEITA' AS tipo, c.plano_conta_id, SUM(b.valor_total) AS valor
              FROM baixas b JOIN contas_receber c ON c.id = b.conta_receber_id
             WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 GROUP BY c.plano_conta_id
            UNION ALL
            SELECT 'DESPESA', c.plano_conta_id, SUM(b.valor_total)
              FROM baixas b JOIN contas_pagar c ON c.id = b.conta_pagar_id
-            WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 GROUP BY c.plano_conta_id`;
+            WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NULL
+            GROUP BY c.plano_conta_id
+           UNION ALL
+           SELECT 'DESPESA', plano_conta_id, SUM(valor) FROM (${SQL_PAGAMENTO_FATURAS_POR_CATEGORIA}) faturas
+            GROUP BY plano_conta_id`;
     const linhas: { tipo: TipoPlanoConta; plano_conta_id: string | null; valor: string }[] = await this.dataSource.query(
       `${porContas}
        UNION ALL
