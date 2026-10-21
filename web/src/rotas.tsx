@@ -5,6 +5,7 @@ import { Auditoria } from './paginas/Auditoria';
 import { CartaoDetalhe } from './paginas/CartaoDetalhe';
 import { Cartoes } from './paginas/Cartoes';
 import { CentrosCusto } from './paginas/CentrosCusto';
+import { Conciliacao } from './paginas/Conciliacao';
 import { Compras } from './paginas/Compras';
 import { ContasBancarias } from './paginas/ContasBancarias';
 import { Contas, PAGAR, RECEBER } from './paginas/Contas';
@@ -70,6 +71,7 @@ export const rotas = createBrowserRouter([
           { path: '/cartoes', element: <Cartoes /> },
           { path: '/cartoes/:id', element: <CartaoDetalhe /> },
           { path: '/extrato', element: <Extrato /> },
+          { path: '/conciliacao', element: <Conciliacao /> },
           { path: '/dre', element: <Dre /> },
           { path: '/produtos', element: <Produtos /> },
           { path: '/contas-bancarias', element: <ContasBancarias /> },

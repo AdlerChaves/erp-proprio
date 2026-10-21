@@ -39,6 +39,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
 - Cartões de crédito: cartão ligado a uma conta bancária e ao emissor; lançamentos (à vista, parcelados e estornos) por fatura, com datas de fechamento e vencimento ajustáveis mês a mês, fechamento conferido com o banco e pagamento pela conta a pagar da fatura.
+- Conciliação bancária: importa o extrato OFX do banco, concilia sozinho o que bate, sugere movimentações e contas em aberto pelo valor, lança tarifas e rendimentos como avulsos, ignora linhas que se anulam e compara o saldo do banco com o do sistema.
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
@@ -135,6 +136,11 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET/PATCH | `/api/cartoes/:id/faturas/:competencia` | Fatura do mês de vencimento AAAA-MM; o PATCH ajusta fechamento e vencimento e redistribui as compras |
 | POST | `/api/cartoes/:id/faturas/:competencia/fechamento` · `/reabertura` | Fecha a fatura conferida com o banco, ou reabre se não houver pagamento |
 | POST/PATCH/DELETE | `/api/cartoes/:id/lancamentos` · `/:lancamentoId` | Compra (parcelada ou não) ou estorno; a alteração muda descrição e classificação; a exclusão remove a compra inteira |
+| GET | `/api/conciliacao?contaBancariaId=&de=&ate=&status=` | Painel: linhas do extrato com sugestões, movimentações sem par, resumo e saldo do banco × sistema |
+| POST | `/api/conciliacao/importacoes` | Importa um OFX (em base64); repetidas são ignoradas e o que bate é conciliado sozinho |
+| POST | `/api/conciliacao/automatica/:contaBancariaId` | Roda de novo a conciliação automática nas linhas pendentes |
+| POST/DELETE | `/api/conciliacao/linhas/:id/conciliacao` | Liga a linha a uma movimentação, ou desfaz |
+| POST | `/api/conciliacao/linhas/:id/ignorar` · `/avulsa` · `/baixa` | Ignora a linha, lança uma avulsa ou baixa uma conta a receber/pagar já conciliada |
 | GET | `/api/cnpj/:cnpj` | Dados públicos do CNPJ na Receita Federal (BrasilAPI, com a Minha Receita como reserva), no formato do cadastro |
 | GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
@@ -184,6 +190,13 @@ Cartões de crédito:
 - Fechar a fatura trava lançamentos e datas; reabrir só sem pagamento. A descrição e a classificação podem mudar a qualquer momento.
 - Na DRE por competência, cada compra entra na sua categoria pela data da compra (estorno desconta) e a conta da fatura fica de fora, para não contar duas vezes. Por caixa, o pagamento da fatura é dividido entre as categorias das compras, na proporção do valor de cada uma.
 
+Conciliação bancária:
+
+- Lê OFX 1.x (SGML) e 2.x (XML), em Windows-1252 ou UTF-8; fatura de cartão em OFX é recusada. Cada linha tem uma chave (FITID, data, valor e ocorrência), então reimportar o mesmo extrato, ou um que se sobrepõe, não duplica nada. Linhas antes do saldo inicial da conta ficam de fora.
+- Conciliação automática só quando há exatamente uma movimentação do mesmo tipo e valor em até 3 dias e nenhuma outra linha do extrato disputando com ela; o resto fica pendente com sugestões (movimentações em até 7 dias e contas em aberto com o mesmo saldo em até 45 dias).
+- Baixar uma conta pela linha usa o valor do banco: o excesso vira juros (ou multa, se informada) e a falta vira desconto, se marcado, ou baixa parcial.
+- O saldo do banco é o da última importação, comparado com o saldo do sistema na mesma data.
+
 Consulta de CNPJ:
 
 - A consulta passa pela API, nunca direto do navegador (a CSP só permite a própria origem). Fontes gratuitas dos dados abertos da Receita: BrasilAPI e, se ela falhar, Minha Receita. CNPJ inexistente responde 404; as duas fora do ar, 503 com orientação para preencher manualmente.
@@ -225,6 +238,7 @@ npm run test:e2e
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
 | `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
+| `test/conciliacao.e2e-spec.ts` | Leitura de OFX (SGML/XML, codificações, sinais), importação sem duplicar, conciliação automática e disputas, ações por linha, baixa com juros/desconto, saldo, perfis e isolamento |
 | `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |

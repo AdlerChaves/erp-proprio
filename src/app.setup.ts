@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ErroBancoFilter } from './common/erro-banco.filter';
@@ -26,6 +27,9 @@ export function configurarApp(app: INestApplication) {
   }
 
   app.use(cookieParser());
+
+  // Extratos OFX chegam em base64 no corpo JSON; o padrão de 100 KB não comporta um ano de extrato.
+  (app as NestExpressApplication).useBodyParser('json', { limit: '2mb' });
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(

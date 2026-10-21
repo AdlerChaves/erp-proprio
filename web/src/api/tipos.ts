@@ -443,3 +443,45 @@ export interface FaturaCartao {
   contaPagar: { id: string; status: StatusConta; valor: number } | null;
   lancamentos: LancamentoCartao[];
 }
+
+export type StatusLinhaExtrato = 'PENDENTE' | 'CONCILIADA' | 'IGNORADA';
+
+export interface ContaSugerida {
+  id: string;
+  descricao: string;
+  dataVencimento: string;
+  pessoa: string;
+  saldo: number;
+}
+
+export interface LinhaExtrato {
+  id: string;
+  data: string;
+  tipo: TipoMovimentacao;
+  valor: number;
+  descricao: string;
+  documento: string | null;
+  status: StatusLinhaExtrato;
+  movimentacaoId: string | null;
+  movimentacao: Movimentacao | null;
+  sugestoes: Movimentacao[];
+  contasSugeridas: ContaSugerida[];
+}
+
+export interface PainelConciliacao {
+  contaBancaria: { id: string; nome: string };
+  de: string;
+  ate: string;
+  linhas: LinhaExtrato[];
+  semPar: Movimentacao[];
+  resumo: { pendentes: number; conciliadas: number; ignoradas: number };
+  saldos: { data: string; banco: number; sistema: number; diferenca: number } | null;
+  ultimaImportacao: { nomeArquivo: string; criadoEm: string; de: string | null; ate: string | null } | null;
+}
+
+export interface ResultadoImportacao {
+  novas: number;
+  repetidas: number;
+  conciliadasAutomaticamente: number;
+  avisos: string[];
+}
