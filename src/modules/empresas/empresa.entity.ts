@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { decimalTransformer } from '../../common/decimal.transformer';
+import type { EnderecoDto as Endereco } from '../../common/endereco.dto';
 
 export enum RegimeTributario {
   SIMPLES_NACIONAL = 'SIMPLES_NACIONAL',
@@ -39,6 +40,17 @@ export class Empresa {
 
   @Column({ default: true })
   ativo: boolean;
+
+  // Contato: aparece no cabeçalho de orçamentos e pedidos.
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  telefone: string | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  email: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  endereco: Endereco | null;
 
   // Dados fiscais, usados na nota de serviço (DPS).
 

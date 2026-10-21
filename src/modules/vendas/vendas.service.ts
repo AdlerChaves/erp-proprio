@@ -11,6 +11,9 @@ import { ContasReceberService } from '../contas-receber/contas-receber.service';
 import { EstoqueService } from '../estoque/estoque.service';
 import { OrigemMovimentacaoEstoque, TipoMovimentacaoEstoque } from '../estoque/movimentacao-estoque.entity';
 import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
+import { dadosVenda, geradoEm } from '../documentos/dados-documento';
+import { gerarPdf, montarDocumento } from '../documentos/documento-pdf';
+import { Empresa } from '../empresas/empresa.entity';
 import { NotaServico, StatusNotaServico } from '../nfse/nota-servico.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
 import { Produto, TipoProduto } from '../produtos/produto.entity';
@@ -54,6 +57,15 @@ export class VendasService {
     });
     if (!venda) throw new NotFoundException(`Venda ${id} não encontrada`);
     return { ...venda, contas: await this.contasReceber.findDaOrigem(empresaId, { vendaId: id }) };
+  }
+
+  /** Orçamento, pedido ou venda em PDF, conforme a situação. */
+  async pdf(empresaId: string, id: string) {
+    const venda = await this.findOne(empresaId, id);
+    const empresa = await this.dataSource.getRepository(Empresa).findOneByOrFail({ id: empresaId });
+    const dados = dadosVenda(venda, empresa, geradoEm());
+    const nome = `${dados.tipo === 'ORCAMENTO' ? 'Orcamento' : dados.tipo === 'VENDA' ? 'Venda' : 'Pedido'}-${venda.numero}.pdf`;
+    return { nome, conteudo: await gerarPdf(montarDocumento(dados)) };
   }
 
   async create(empresaId: string, dto: CreateVendaDto) {

@@ -1,6 +1,7 @@
 import { OmitType, PartialType } from '@nestjs/swagger';
-import { IsEnum, IsIn, IsInt, IsNumber, IsOptional, Length, Matches, Max, Min, Validate } from 'class-validator';
-import { MunicipioIbge } from '../../../common/endereco.dto';
+import { Type } from 'class-transformer';
+import { IsEmail, IsEnum, IsIn, IsInt, IsNumber, IsOptional, Length, Matches, Max, Min, Validate, ValidateNested } from 'class-validator';
+import { EnderecoDto, MunicipioIbge } from '../../../common/endereco.dto';
 import { AmbienteNfse, RegimeTributario } from '../empresa.entity';
 import { CreateEmpresaDto } from './create-empresa.dto';
 
@@ -41,4 +42,18 @@ export class UpdateEmpresaDto extends PartialType(OmitType(CreateEmpresaDto, ['c
   @IsOptional()
   @IsIn([AmbienteNfse.PRODUCAO, AmbienteNfse.HOMOLOGACAO])
   nfseAmbiente?: AmbienteNfse;
+
+  /** Contato que aparece em orçamentos e pedidos. Envie null para limpar. */
+  @IsOptional()
+  @Length(8, 20)
+  telefone?: string | null;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EnderecoDto)
+  endereco?: EnderecoDto | null;
 }

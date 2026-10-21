@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, EntityManager, FindOptionsWhere, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { hoje } from '../../common/datas';
+import { dadosCompra, geradoEm } from '../documentos/dados-documento';
+import { gerarPdf, montarDocumento } from '../documentos/documento-pdf';
+import { Empresa } from '../empresas/empresa.entity';
 import { centavos, reais } from '../../common/dinheiro';
 import { proximoNumero } from '../../common/numeracao';
 import { milesimos, totalItem } from '../../common/quantidade';
@@ -50,6 +53,13 @@ export class ComprasService {
     });
     if (!compra) throw new NotFoundException(`Compra ${id} não encontrada`);
     return { ...compra, contas: await this.contasPagar.findDaOrigem(empresaId, { compraId: id }) };
+  }
+
+  /** Pedido de compra em PDF, para enviar ao fornecedor. */
+  async pdf(empresaId: string, id: string) {
+    const compra = await this.findOne(empresaId, id);
+    const empresa = await this.dataSource.getRepository(Empresa).findOneByOrFail({ id: empresaId });
+    return { nome: `Pedido-de-compra-${compra.numero}.pdf`, conteudo: await gerarPdf(montarDocumento(dadosCompra(compra, empresa, geradoEm()))) };
   }
 
   async create(empresaId: string, dto: CreateCompraDto) {

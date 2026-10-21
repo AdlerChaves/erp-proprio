@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, Loader, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Grid, Group, Loader, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,129 @@ function FormDados({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar:
           <TextInput label="Nome fantasia" description="Aparece no topo da tela" disabled={!podeEditar} {...form.getInputProps('nomeFantasia')} />
           <TextInput label="CNPJ" value={documento(empresa.cnpj)} disabled description="Não pode ser alterado" readOnly />
         </SimpleGrid>
+        {podeEditar && (
+          <Group justify="flex-end">
+            <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
+              Salvar
+            </Button>
+          </Group>
+        )}
+      </Stack>
+    </form>
+  );
+}
+
+const cepFormatado = (cep: string) => cep.replace(/(\d{5})(\d{3})/, '$1-$2');
+
+/** Algum campo de endereço preenchido. */
+const temEndereco = (c: { cep: string; logradouro: string; numero: string; bairro: string; codigoMunicipio: string | null }) =>
+  !!(digitos(c.cep) || c.logradouro.trim() || c.numero.trim() || c.bairro.trim() || c.codigoMunicipio);
+
+/** Telefone, e-mail e endereço: vão no cabeçalho dos orçamentos e pedidos em PDF. */
+function FormContato({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
+  const queryClient = useQueryClient();
+  const valoresDe = (e: DadosEmpresa) => ({
+    telefone: e.telefone ?? '',
+    email: e.email ?? '',
+    cep: e.endereco ? cepFormatado(e.endereco.cep) : '',
+    logradouro: e.endereco?.logradouro ?? '',
+    numero: e.endereco?.numero ?? '',
+    complemento: e.endereco?.complemento ?? '',
+    bairro: e.endereco?.bairro ?? '',
+    codigoMunicipio: e.endereco?.codigoMunicipio ?? e.codigoMunicipio ?? (null as string | null),
+  });
+  const form = useForm({
+    initialValues: valoresDe(empresa),
+    validate: {
+      email: (v) => (!v || /^\S+@\S+\.\S+$/.test(v) ? null : 'E-mail inválido'),
+      telefone: (v) => (!v || digitos(v).length >= 8 ? null : 'Telefone incompleto'),
+      // O endereço é opcional, mas, se começar a preencher, precisa ficar completo.
+      cep: (v, c) => (!temEndereco(c) || digitos(v).length === 8 ? null : 'CEP com 8 dígitos'),
+      logradouro: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe a rua'),
+      numero: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe o número (ou S/N)'),
+      bairro: (v, c) => (!temEndereco(c) || v.trim() ? null : 'Informe o bairro'),
+      codigoMunicipio: (v, c) => (!temEndereco(c) || v ? null : 'Escolha o município'),
+    },
+  });
+  // Campos que a Receita não informa continuam como estavam.
+  const receita = useBuscaCnpj((d) => {
+    const atual = form.values;
+    const ou = (novo: string | null | undefined, antigo: string) => novo || antigo;
+    form.setValues({
+      telefone: ou(d.telefone, atual.telefone),
+      email: ou(d.email?.toLowerCase(), atual.email),
+      cep: ou(d.endereco.cep && cepFormatado(d.endereco.cep), atual.cep),
+      logradouro: ou(d.endereco.logradouro, atual.logradouro),
+      numero: ou(d.endereco.numero, atual.numero),
+      complemento: ou(d.endereco.complemento, atual.complemento),
+      bairro: ou(d.endereco.bairro, atual.bairro),
+      codigoMunicipio: d.endereco.codigoMunicipio ?? atual.codigoMunicipio,
+    });
+    avisarSucesso('Contato e endereço preenchidos pela Receita; confira e salve');
+  });
+  const salvar = useMutation({
+    mutationFn: (v: typeof form.values) =>
+      api.patch<DadosEmpresa>('/empresas/atual', {
+        telefone: digitos(v.telefone) || null,
+        email: v.email.trim() || null,
+        endereco: temEndereco(v)
+          ? {
+              cep: digitos(v.cep),
+              logradouro: v.logradouro.trim(),
+              numero: v.numero.trim(),
+              complemento: v.complemento.trim() || undefined,
+              bairro: v.bairro.trim(),
+              codigoMunicipio: v.codigoMunicipio,
+            }
+          : null,
+      }),
+    onSuccess: (atualizada) => {
+      queryClient.setQueryData(['/empresas/atual'], atualizada);
+      form.resetDirty(valoresDe(atualizada));
+      avisarSucesso('Contato e endereço salvos');
+    },
+    onError: avisarErro,
+  });
+
+  return (
+    <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
+      <Stack>
+        {podeEditar && (
+          <Group>
+            <Button size="xs" variant="light" loading={receita.buscando} onClick={() => receita.buscar(empresa.cnpj)}>
+              Preencher pela Receita Federal
+            </Button>
+            <Text size="xs" c="dimmed">
+              Traz telefone, e-mail e endereço do cadastro do CNPJ
+            </Text>
+          </Group>
+        )}
+        <Grid>
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <TextInput label="Telefone" disabled={!podeEditar} {...form.getInputProps('telefone')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <TextInput label="E-mail" type="email" disabled={!podeEditar} {...form.getInputProps('email')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 4 }}>
+            <TextInput label="CEP" placeholder="00000-000" disabled={!podeEditar} {...form.getInputProps('cep')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 8 }}>
+            <CampoMunicipio label="Município" disabled={!podeEditar} {...form.getInputProps('codigoMunicipio')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 8 }}>
+            <TextInput label="Rua" disabled={!podeEditar} {...form.getInputProps('logradouro')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 4 }}>
+            <TextInput label="Número" disabled={!podeEditar} {...form.getInputProps('numero')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <TextInput label="Complemento" disabled={!podeEditar} {...form.getInputProps('complemento')} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <TextInput label="Bairro" disabled={!podeEditar} {...form.getInputProps('bairro')} />
+          </Grid.Col>
+        </Grid>
         {podeEditar && (
           <Group justify="flex-end">
             <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
@@ -282,6 +405,14 @@ export function Empresa() {
           ) : (
             <FormDados key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />
           )}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Contato e endereço</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            Aparecem no cabeçalho dos orçamentos e pedidos em PDF
+          </Text>
+          {empresa.data && <FormContato key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
         </Card>
 
         <Card withBorder padding="lg">

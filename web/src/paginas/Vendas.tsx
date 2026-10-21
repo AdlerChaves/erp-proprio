@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { Pessoa, PosicaoEstoque, StatusVenda, Venda } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoData, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
-import { type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
+import { BotaoPdf, type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
 import { NotasDaVenda } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda, qtd } from '../util/formato';
@@ -149,9 +149,12 @@ function Detalhe({ id, aoEditar, aoFaturar }: { id: string; aoEditar: (v: Venda)
         <Text fw={700} size="lg">
           Venda nº {v.numero}
         </Text>
-        <Badge color={status.cor} variant="light" size="lg">
-          {status.rotulo}
-        </Badge>
+        <Group gap="xs">
+          <BotaoPdf rota={`/vendas/${v.id}`} nome={`Venda-${v.numero}.pdf`} />
+          <Badge color={status.cor} variant="light" size="lg">
+            {status.rotulo}
+          </Badge>
+        </Group>
       </Group>
       {linha('Cliente', v.cliente.nome)}
       {linha('Emissão', data(v.dataEmissao))}

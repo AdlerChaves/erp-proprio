@@ -156,6 +156,9 @@ export interface Empresa {
   nfseSerie: string;
   /** 1 = produção, 2 = homologação. */
   nfseAmbiente: 1 | 2;
+  telefone: string | null;
+  email: string | null;
+  endereco: Endereco | null;
 }
 
 export type TipoProduto = 'PRODUTO' | 'SERVICO';

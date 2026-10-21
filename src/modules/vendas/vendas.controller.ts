@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
@@ -25,6 +26,14 @@ export class VendasController {
   @Get(':id')
   findOne(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(sessao.empresaId, id);
+  }
+
+  /** Orçamento, pedido ou venda em PDF, para enviar ao cliente. */
+  @Get(':id/pdf')
+  async pdf(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const { nome, conteudo } = await this.service.pdf(sessao.empresaId, id);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${nome}"` });
+    return new StreamableFile(conteudo);
   }
 
   @Post()

@@ -1,12 +1,29 @@
 import { ActionIcon, Badge, Button, Grid, Group, NumberInput, type NumberInputProps, Paper, Select, SimpleGrid, Stack, Table, Text, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMediaQuery } from '@mantine/hooks';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconFileTypePdf, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/cliente';
+import { useState } from 'react';
+import { api, baixarArquivo } from '../api/cliente';
 import type { CentroCusto, Compra, ContaFinanceira, Pessoa, PlanoConta, Produto, TipoPlanoConta, Venda } from '../api/tipos';
 import { data, moeda, qtd, STATUS_CONTA, totalItemCentavos } from '../util/formato';
 import { avisarErro, avisarSucesso, CampoData, CampoMoeda } from './comum';
+
+/** Baixa o orçamento, pedido ou pedido de compra em PDF, com o título conforme a situação. */
+export function BotaoPdf({ rota, nome }: { rota: string; nome: string }) {
+  const [baixando, setBaixando] = useState(false);
+  const baixar = () => {
+    setBaixando(true);
+    baixarArquivo(`${rota}/pdf`, nome)
+      .catch(avisarErro)
+      .finally(() => setBaixando(false));
+  };
+  return (
+    <Button variant="light" size="xs" leftSection={<IconFileTypePdf size={16} />} loading={baixando} onClick={baixar}>
+      PDF
+    </Button>
+  );
+}
 
 /** O que diferencia o formulário de venda do de compra. */
 export interface ConfigDocumento {

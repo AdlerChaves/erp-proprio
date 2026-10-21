@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { Compra, Pessoa, StatusCompra } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoData, Confirmacao, ErroCarregamento, MenuAcoes, SemPermissao } from '../componentes/comum';
-import { type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
+import { BotaoPdf, type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda } from '../util/formato';
 
@@ -113,9 +113,12 @@ function Detalhe({ id, aoEditar, aoReceber }: { id: string; aoEditar: (c: Compra
         <Text fw={700} size="lg">
           Compra nº {c.numero}
         </Text>
-        <Badge color={STATUS_COMPRA[c.status].cor} variant="light" size="lg">
-          {STATUS_COMPRA[c.status].rotulo}
-        </Badge>
+        <Group gap="xs">
+          <BotaoPdf rota={`/compras/${c.id}`} nome={`Pedido-de-compra-${c.numero}.pdf`} />
+          <Badge color={STATUS_COMPRA[c.status].cor} variant="light" size="lg">
+            {STATUS_COMPRA[c.status].rotulo}
+          </Badge>
+        </Group>
       </Group>
       {linha('Fornecedor', c.fornecedor.nome)}
       {linha('Pedido em', data(c.dataEmissao))}

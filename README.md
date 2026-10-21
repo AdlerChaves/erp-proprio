@@ -42,10 +42,10 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Conciliação bancária: importa o extrato OFX do banco, concilia sozinho o que bate, sugere movimentações e contas em aberto pelo valor, lança tarifas e rendimentos como avulsos, ignora linhas que se anulam e compara o saldo do banco com o do sistema.
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
-- Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento) e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
+- Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento), orçamento, pedido de venda e pedido de compra em PDF, e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
 - Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo.
-- Administração: dados da empresa e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
+- Administração: dados da empresa (inclusive contato e endereço, que vão nos PDFs) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
 - Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
 - Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
 - `npm run typecheck`, `npm test` (Vitest) e `npm run build` dentro de `web/`.
@@ -136,6 +136,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET/PATCH | `/api/cartoes/:id/faturas/:competencia` | Fatura do mês de vencimento AAAA-MM; o PATCH ajusta fechamento e vencimento e redistribui as compras |
 | POST | `/api/cartoes/:id/faturas/:competencia/fechamento` · `/reabertura` | Fecha a fatura conferida com o banco, ou reabre se não houver pagamento |
 | POST/PATCH/DELETE | `/api/cartoes/:id/lancamentos` · `/:lancamentoId` | Compra (parcelada ou não) ou estorno; a alteração muda descrição e classificação; a exclusão remove a compra inteira |
+| GET | `/api/vendas/:id/pdf` · `/api/compras/:id/pdf` | Orçamento, pedido de venda, venda ou pedido de compra em PDF, conforme a situação |
 | GET | `/api/conciliacao?contaBancariaId=&de=&ate=&status=` | Painel: linhas do extrato com sugestões, movimentações sem par, resumo e saldo do banco × sistema |
 | POST | `/api/conciliacao/importacoes` | Importa um OFX (em base64); repetidas são ignoradas e o que bate é conciliado sozinho |
 | POST | `/api/conciliacao/automatica/:contaBancariaId` | Roda de novo a conciliação automática nas linhas pendentes |
@@ -197,6 +198,11 @@ Conciliação bancária:
 - Baixar uma conta pela linha usa o valor do banco: o excesso vira juros (ou multa, se informada) e a falta vira desconto, se marcado, ou baixa parcial.
 - O saldo do banco é o da última importação, comparado com o saldo do sistema na mesma data.
 
+Orçamentos e pedidos em PDF:
+
+- O título acompanha a situação: orçamento, pedido de venda (com linha de "De acordo" do cliente), venda faturada ou pedido de compra; cancelado leva marca-d'água. As condições de pagamento vêm das contas lançadas ou, antes disso, da previsão de parcelas.
+- O cabeçalho usa nome fantasia, razão social, CNPJ, inscrição municipal, endereço, telefone e e-mail da empresa. O PDF é gerado no servidor (pdfmake, fonte Helvetica embutida, sem acesso a arquivos ou URLs).
+
 Consulta de CNPJ:
 
 - A consulta passa pela API, nunca direto do navegador (a CSP só permite a própria origem). Fontes gratuitas dos dados abertos da Receita: BrasilAPI e, se ela falhar, Minha Receita. CNPJ inexistente responde 404; as duas fora do ar, 503 com orientação para preencher manualmente.
@@ -239,6 +245,7 @@ npm run test:e2e
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
 | `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
 | `test/conciliacao.e2e-spec.ts` | Leitura de OFX (SGML/XML, codificações, sinais), importação sem duplicar, conciliação automática e disputas, ações por linha, baixa com juros/desconto, saldo, perfis e isolamento |
+| `test/documentos.e2e-spec.ts` | Textos do PDF (moeda, documentos, endereço, parcelas), PDF válido com várias páginas, título e nome por situação, contato da empresa, perfis e isolamento |
 | `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |
