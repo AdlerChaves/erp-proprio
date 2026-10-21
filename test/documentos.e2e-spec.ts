@@ -74,11 +74,13 @@ describe('Dados do documento em PDF', () => {
     expect(faturada).toMatchObject({ tipo: 'VENDA', pagamento: [{ parcela: 'Única', vencimento: '25/10/2026', valor: 'R$ 331,25' }] });
     expect(dadosVenda({ ...VENDA, status: 'CANCELADA' }, EMPRESA, '').cancelado).toBe(true);
     expect(dadosVenda({ ...VENDA, status: 'PEDIDO' }, EMPRESA, '').tipo).toBe('PEDIDO');
+    expect(dadosVenda({ ...VENDA, cliente: { ...VENDA.cliente, documento: null } }, EMPRESA, '').pessoa.documento).toBeNull();
   });
 
   it('gera um PDF válido, inclusive com acentos e muitos itens', async () => {
     const itens = Array.from({ length: 80 }, (_, i) => ({ ...VENDA.itens[0], descricao: `Item número ${i} – pão de queijo`, produto: { codigo: `P${i}`, unidade: 'UN' } }));
-    const pdf = await gerarPdf(montarDocumento(dadosVenda({ ...VENDA, itens }, EMPRESA, '21/10/2026 14:30')));
+    const cliente = { ...VENDA.cliente, documento: null };
+    const pdf = await gerarPdf(montarDocumento(dadosVenda({ ...VENDA, cliente, itens }, EMPRESA, '21/10/2026 14:30')));
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     expect(pdf.subarray(-6).toString()).toMatch(/%%EOF/);
     expect(pdf.toString('latin1')).toMatch(/\/Count 3\b/);
@@ -107,7 +109,7 @@ describe('PDF de vendas e compras', () => {
   });
 
   it('o nome e o título acompanham a situação da venda', async () => {
-    const cliente = (await api(app, a.token).post('/clientes', { nome: 'Cliente', documento: '52998224725' }).expect(201)).body.id;
+    const cliente = (await api(app, a.token).post('/clientes', { nome: 'Cliente sem documento' }).expect(201)).body.id;
     const venda = (await api(app, a.token).post('/vendas', { clienteId: cliente, itens: [{ produtoId: await produto(), quantidade: 2 }] }).expect(201)).body;
 
     let res = await pdf(`/vendas/${venda.id}/pdf`).expect(200);

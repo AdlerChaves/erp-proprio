@@ -20,7 +20,7 @@ export class ClientesService {
   }
 
   async create(empresaId: string, dto: CreateClienteDto) {
-    await this.ensureDocumentoLivre(empresaId, dto.documento);
+    if (dto.documento) await this.ensureDocumentoLivre(empresaId, dto.documento);
     return this.repo.save(this.repo.create({ ...dto, empresaId }));
   }
 

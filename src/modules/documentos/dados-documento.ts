@@ -14,7 +14,8 @@ const QTD = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
 const moeda = (valor: number) => MOEDA.format(valor).replace(/ /g, ' ');
 const data = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
-function documento(valor: string) {
+function documento(valor: string | null) {
+  if (!valor) return null;
   const d = valor.replace(/\D/g, '');
   if (d.length === 11) return `CPF ${d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}`;
   if (d.length === 14) return `CNPJ ${d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')}`;
@@ -42,7 +43,7 @@ const contato = (tel: string | null, email: string | null) => [telefone(tel), em
 
 interface Pessoa {
   nome: string;
-  documento: string;
+  documento: string | null;
   telefone: string | null;
   email: string | null;
   endereco?: EnderecoDto | null;
@@ -84,7 +85,7 @@ interface Documento {
 const parteEmpresa = (e: Empresa): DadosDocumento['empresa'] => ({
   nome: e.nomeFantasia || e.razaoSocial,
   razaoSocial: e.nomeFantasia ? e.razaoSocial : null,
-  documento: documento(e.cnpj),
+  documento: documento(e.cnpj)!,
   inscricaoMunicipal: e.inscricaoMunicipal,
   endereco: endereco(e.endereco, e.codigoMunicipio),
   contato: contato(e.telefone, e.email),

@@ -34,7 +34,8 @@ export interface Endereco {
 export interface Pessoa {
   id: string;
   nome: string;
-  documento: string;
+  /** Só cliente pode não ter (proposta antes de receber os documentos). */
+  documento: string | null;
   email: string | null;
   telefone: string | null;
   /** Só clientes: dados do tomador na nota de serviço. */

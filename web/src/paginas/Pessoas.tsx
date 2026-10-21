@@ -16,6 +16,8 @@ export interface ConfigPessoas {
   titulo: string;
   /** Clientes são tomadores na nota de serviço: pedem endereço e inscrição municipal. */
   dadosFiscais?: boolean;
+  /** Cliente pode ser cadastrado sem CPF/CNPJ para receber uma proposta; a nota de serviço exige. */
+  documentoOpcional?: boolean;
   singular: string;
   permissaoEscrita: Permissao;
 }
@@ -26,6 +28,7 @@ export const CLIENTES: ConfigPessoas = {
   singular: 'cliente',
   permissaoEscrita: 'escreverClientes',
   dadosFiscais: true,
+  documentoOpcional: true,
 };
 export const FORNECEDORES: ConfigPessoas = {
   rota: '/fornecedores',
@@ -43,7 +46,7 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
   const form = useForm({
     initialValues: {
       nome: pessoa?.nome ?? '',
-      documento: pessoa ? documento(pessoa.documento) : '',
+      documento: pessoa?.documento ? documento(pessoa.documento) : '',
       email: pessoa?.email ?? '',
       telefone: pessoa?.telefone ?? '',
       ativo: pessoa?.ativo ?? true,
@@ -58,7 +61,9 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
     validate: {
       nome: (v) => (v.trim() ? null : 'Informe o nome'),
       documento: (v) =>
-        ![11, 14].includes(digitos(v).length)
+        config.documentoOpcional && !digitos(v)
+          ? null
+          : ![11, 14].includes(digitos(v).length)
           ? 'CPF (11 dígitos) ou CNPJ (14 dígitos)'
           : documentoValido(v)
             ? null
@@ -97,7 +102,8 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
     mutationFn: (v: typeof form.values) => {
       const corpo = {
         nome: v.nome.trim(),
-        documento: digitos(v.documento),
+        // Sem documento: no cadastro novo não vai; na edição, null limpa.
+        documento: digitos(v.documento) || (pessoa ? null : undefined),
         email: v.email.trim() || undefined,
         telefone: digitos(v.telefone) || undefined,
         ativo: v.ativo,
@@ -130,8 +136,15 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
       <Stack>
         <TextInput label="Nome" data-autofocus {...form.getInputProps('nome')} />
         <TextInput
-          label="CPF ou CNPJ"
-          description={pessoa ? undefined : 'Com um CNPJ válido, os dados da Receita Federal são preenchidos sozinhos'}
+          label={config.documentoOpcional ? 'CPF ou CNPJ (opcional)' : 'CPF ou CNPJ'}
+          description={
+            [
+              !pessoa && 'Com um CNPJ válido, os dados da Receita Federal são preenchidos sozinhos.',
+              config.documentoOpcional && 'Pode ficar em branco para enviar uma proposta; é obrigatório para emitir nota de serviço.',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
           {...form.getInputProps('documento')}
           onChange={(e) => {
             form.getInputProps('documento').onChange(e);
@@ -213,7 +226,7 @@ export function Pessoas({ config }: { config: ConfigPessoas }) {
       (p) =>
         !termo ||
         p.nome.toLowerCase().includes(termo) ||
-        (termoDigitos && p.documento.includes(termoDigitos)) ||
+        (termoDigitos && p.documento?.includes(termoDigitos)) ||
         p.email?.toLowerCase().includes(termo),
     );
   }, [lista.data, busca]);
@@ -267,7 +280,15 @@ export function Pessoas({ config }: { config: ConfigPessoas }) {
                 {filtradas.map((p) => (
                   <Table.Tr key={p.id}>
                     <Table.Td fw={500}>{p.nome}</Table.Td>
-                    <Table.Td>{documento(p.documento)}</Table.Td>
+                    <Table.Td>
+                      {p.documento ? (
+                        documento(p.documento)
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          Não informado
+                        </Text>
+                      )}
+                    </Table.Td>
                     <Table.Td>{p.email}</Table.Td>
                     <Table.Td>{p.telefone}</Table.Td>
                     <Table.Td>

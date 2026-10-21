@@ -100,6 +100,25 @@ describe('Cadastros', () => {
     });
   });
 
+  describe('clientes', () => {
+    it('aceitam ficar sem CPF/CNPJ (proposta), vários sem conflito, e o documento pode ser incluído e limpo depois', async () => {
+      const prospect = (await api(app, a.token).post('/clientes', { nome: 'Prospect A' }).expect(201)).body;
+      expect(prospect.documento).toBeNull();
+      await api(app, a.token).post('/clientes', { nome: 'Prospect B', documento: null }).expect(201);
+      await api(app, a.token).post('/clientes', { nome: 'Prospect C', documento: '' }).expect(400);
+
+      const outro = await criarCliente(app, a.token);
+      await api(app, a.token).patch(`/clientes/${prospect.id}`, { documento: outro.documento }).expect(409);
+      const { body } = await api(app, a.token).patch(`/clientes/${prospect.id}`, { documento: '52998224725' }).expect(200);
+      expect(body.documento).toBe('52998224725');
+      expect((await api(app, a.token).patch(`/clientes/${prospect.id}`, { documento: null }).expect(200)).body.documento).toBeNull();
+    });
+
+    it('fornecedores continuam exigindo o documento', async () => {
+      await api(app, a.token).post('/fornecedores', { nome: 'Sem doc' }).expect(400);
+    });
+  });
+
   describe('fornecedores', () => {
     it('recusa documento repetido na empresa, mas aceita o de um cliente', async () => {
       const cliente = await criarCliente(app, a.token);

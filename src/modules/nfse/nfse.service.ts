@@ -80,7 +80,11 @@ export class NfseService {
       throw new BadRequestException(`A venda nº ${venda.numero} precisa estar faturada para gerar a nota de serviço`);
     }
     const cliente = await this.clientes.findOneByOrFail({ id: venda.clienteId });
-    if (!documentoValido(cliente.documento)) {
+    if (!cliente.documento) {
+      throw new BadRequestException(`Informe o CPF/CNPJ no cadastro do cliente ${cliente.nome} antes de gerar a nota de serviço`);
+    }
+    const documentoTomador = cliente.documento;
+    if (!documentoValido(documentoTomador)) {
       throw new BadRequestException(`O CPF/CNPJ do cliente ${cliente.nome} é inválido; corrija o cadastro antes de emitir`);
     }
 
@@ -140,7 +144,7 @@ export class NfseService {
             aliquotaSimples: empresa.aliquotaSimples,
           },
           tomador: {
-            documento: cliente.documento,
+            documento: documentoTomador,
             nome: cliente.nome,
             inscricaoMunicipal: cliente.inscricaoMunicipal,
             endereco: cliente.endereco,

@@ -7,8 +7,10 @@ export class CreateClienteDto {
   @Length(1, 150)
   nome: string;
 
+  /** Opcional enquanto o cliente não enviou os documentos; obrigatório para a nota de serviço. Envie null para limpar. */
+  @IsOptional()
   @Matches(/^(\d{11}|\d{14})$/, { message: 'documento deve ser CPF (11) ou CNPJ (14) só com dígitos' })
-  documento: string;
+  documento?: string | null;
 
   @IsOptional()
   @IsEmail()

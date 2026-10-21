@@ -44,7 +44,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento), orçamento, pedido de venda e pedido de compra em PDF, e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
-- Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo.
+- Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo. O cliente pode ser cadastrado sem CPF/CNPJ para receber uma proposta; o fornecedor, não.
 - Administração: dados da empresa (inclusive contato e endereço, que vão nos PDFs) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
 - Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
 - Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
@@ -90,7 +90,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | POST | `/api/empresas` | Cria outra empresa com o usuário logado como `ADMIN` |
 | GET/POST | `/api/usuarios` | Lista / dá acesso a usuários da empresa (`ADMIN`) |
 | PATCH | `/api/usuarios/:id` | Altera perfil ou bloqueia o acesso (`ADMIN`) |
-| GET/POST | `/api/clientes` | Lista / cria clientes |
+| GET/POST | `/api/clientes` | Lista / cria clientes; `documento` é opcional (único na empresa quando informado) |
 | GET/PATCH/DELETE | `/api/clientes/:id` | Consulta / altera / remove cliente |
 | GET/POST | `/api/fornecedores` | Lista / cria fornecedores |
 | GET/PATCH/DELETE | `/api/fornecedores/:id` | Consulta / altera / remove fornecedor |
@@ -215,7 +215,7 @@ Nota fiscal de serviço (NFS-e):
 - Por enquanto, só para empresas do **Simples Nacional** (ME/EPP) e **MEI**. Regras do Anexo I aplicadas: prestador sem nome e endereço quando é o emitente; no Simples com ISS apurado pelo Simples, alíquota só com ISS retido (de 2% a 5%); total de tributos pelo percentual do Simples (`pTotTribSN`) ou, no MEI, pelo indicador "não informar". O grupo IBS/CBS fica de fora: para o Simples ele só é obrigatório a partir de 2027.
 - A venda gera uma nota por código de tributação nacional, porque cada NFS-e descreve um serviço; produtos não entram (iriam em NF-e). O número da DPS é sequencial por empresa e nunca se repete.
 - Fluxo atual: gerar a DPS → emitir no portal da prefeitura (Várzea Paulista usa o NFE-Cidades) → registrar aqui o número da NFS-e. Venda com nota emitida só é cancelada depois de cancelar a nota; nota pendente é cancelada junto com a venda.
-- O CPF/CNPJ do cliente e o CNPJ da empresa precisam ter dígitos verificadores válidos.
+- O CPF/CNPJ do cliente é obrigatório para gerar a nota, e ele e o CNPJ da empresa precisam ter dígitos verificadores válidos.
 
 Relatórios:
 

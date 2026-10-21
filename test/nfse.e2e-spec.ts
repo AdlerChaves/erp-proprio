@@ -213,6 +213,10 @@ describe('Nota fiscal de serviço (DPS nacional)', () => {
       const invalido = (await api(app, a.token).post('/clientes', { nome: 'Doc errado', documento: '11222333000182' }).expect(201)).body;
       const v3 = await venderFaturar([{ produtoId: s.id, quantidade: 1 }], invalido.id);
       expect((await gerar(v3.id).expect(400)).body.message).toMatch(/CPF\/CNPJ do cliente Doc errado é inválido/);
+
+      const semDocumento = (await api(app, a.token).post('/clientes', { nome: 'Prospect' }).expect(201)).body;
+      const v4 = await venderFaturar([{ produtoId: s.id, quantidade: 1 }], semDocumento.id);
+      expect((await gerar(v4.id).expect(400)).body.message).toBe('Informe o CPF/CNPJ no cadastro do cliente Prospect antes de gerar a nota de serviço');
     });
 
     it('duas gerações simultâneas da mesma venda: só uma passa', async () => {

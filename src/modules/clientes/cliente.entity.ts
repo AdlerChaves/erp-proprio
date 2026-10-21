@@ -27,9 +27,10 @@ export class Cliente {
   @Column({ length: 150 })
   nome: string;
 
-  // CPF (11) ou CNPJ (14), somente dígitos. Único dentro da empresa.
-  @Column({ length: 14 })
-  documento: string;
+  // CPF (11) ou CNPJ (14), somente dígitos. Único dentro da empresa. Pode faltar num cliente ainda em
+  // negociação (proposta antes de pedir os documentos); a nota de serviço exige.
+  @Column({ type: 'varchar', length: 14, nullable: true })
+  documento: string | null;
 
   @Column({ type: 'varchar', length: 150, nullable: true })
   email: string | null;

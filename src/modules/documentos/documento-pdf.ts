@@ -19,7 +19,7 @@ export interface ParteDocumento {
   nome: string;
   /** Razão social, quando o nome exibido é o fantasia. */
   razaoSocial?: string | null;
-  documento: string;
+  documento: string | null;
   /** Linhas de endereço já formatadas ("Rua X, 10 - Centro", "Várzea Paulista - SP - CEP 13220-000"). */
   endereco: string[];
   contato: string | null;
@@ -30,7 +30,7 @@ export interface DadosDocumento {
   numero: number;
   emissao: string;
   cancelado: boolean;
-  empresa: ParteDocumento & { inscricaoMunicipal?: string | null };
+  empresa: ParteDocumento & { documento: string; inscricaoMunicipal?: string | null };
   /** "Cliente" ou "Fornecedor". */
   rotuloPessoa: string;
   pessoa: ParteDocumento;
@@ -53,7 +53,7 @@ const parte = (titulo: string, p: ParteDocumento): Content => ({
     { text: titulo.toUpperCase(), style: 'rotulo' },
     { text: p.nome, bold: true, fontSize: 11 },
     ...(p.razaoSocial ? [{ text: p.razaoSocial, fontSize: 8, color: CINZA }] : []),
-    { text: p.documento, fontSize: 9 },
+    ...(p.documento ? [{ text: p.documento, fontSize: 9 }] : []),
     ...p.endereco.map((linha) => ({ text: linha, fontSize: 9 })),
     ...(p.contato ? [{ text: p.contato, fontSize: 9 }] : []),
   ],
