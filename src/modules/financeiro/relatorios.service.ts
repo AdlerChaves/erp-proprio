@@ -2,11 +2,12 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { hoje } from '../../common/datas';
 import { centavos, reais } from '../../common/dinheiro';
+import { CentrosCustoService } from '../centros-custo/centros-custo.service';
 import { ContasBancariasService } from '../contas-bancarias/contas-bancarias.service';
 import { MovimentacoesService } from '../movimentacoes/movimentacoes.service';
-import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
+import { PlanoConta, TipoPlanoConta } from '../plano-contas/plano-conta.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
-import { DreDto } from './dto/dre.dto';
+import { DreDto, ResumoCentroCustoDto } from './dto/dre.dto';
 import { FluxoCaixaDto } from './dto/fluxo-caixa.dto';
 
 const MAXIMO_DIAS = 366;
@@ -39,24 +40,81 @@ const SQL_EM_ABERTO = (tabela: 'contas_receber' | 'contas_pagar', chave: 'conta_
     FROM ${tabela} c
    WHERE c.empresa_id = $1 AND c.status IN ('ABERTA', 'PARCIAL')`;
 
+/** " (2/3)" nas parcelas de compras no cartão; nas contas, o número da parcela já está na descrição. */
+const PARCELA = (t: string) => `CASE WHEN ${t}.total_parcelas IS NOT NULL THEN ' (' || ${t}.parcela || '/' || ${t}.total_parcelas || ')' ELSE '' END`;
+
+/** Movimentações avulsas com categoria entram nos dois regimes, pela data delas. */
+const SQL_AVULSAS = `
+  SELECT m.data, CASE WHEN m.tipo = 'ENTRADA' THEN 'RECEITA' ELSE 'DESPESA' END, 'AVULSA', m.id, m.descricao, NULL,
+         m.plano_conta_id, m.centro_custo_id, m.valor
+    FROM movimentacoes_bancarias m
+   WHERE m.empresa_id = $1 AND m.origem = 'AVULSA' AND m.data BETWEEN $2 AND $3`;
+
 /**
- * DRE por caixa: o pagamento de uma fatura de cartão é dividido entre as categorias das compras dela,
- * na proporção do valor líquido (compras − estornos) de cada categoria.
+ * Competência: contas não canceladas pela emissão e pelo valor original; compras no cartão pela data da compra
+ * (estorno desconta). A conta a pagar da fatura fica de fora, para não contar o cartão duas vezes.
  */
-const SQL_PAGAMENTO_FATURAS_POR_CATEGORIA = `
-  WITH pagamentos AS (
-         SELECT c.fatura_cartao_id AS fatura_id, SUM(b.valor_total) AS pago
+const SQL_COMPETENCIA = `
+  SELECT c.data_emissao AS data, 'RECEITA' AS tipo, 'CONTA_RECEBER' AS origem, c.id AS referencia,
+         c.descricao AS descricao, p.nome AS pessoa, c.plano_conta_id, c.centro_custo_id, c.valor
+    FROM contas_receber c JOIN clientes p ON p.id = c.cliente_id
+   WHERE c.empresa_id = $1 AND c.status <> 'CANCELADA' AND c.data_emissao BETWEEN $2 AND $3
+  UNION ALL
+  SELECT c.data_emissao, 'DESPESA', 'CONTA_PAGAR', c.id, c.descricao, f.nome, c.plano_conta_id, c.centro_custo_id, c.valor
+    FROM contas_pagar c JOIN fornecedores f ON f.id = c.fornecedor_id
+   WHERE c.empresa_id = $1 AND c.status <> 'CANCELADA' AND c.data_emissao BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NULL
+  UNION ALL
+  SELECT l.data, 'DESPESA', 'CARTAO', l.compra_id, l.descricao || ${PARCELA('l')}, COALESCE(f.nome, k.nome),
+         l.plano_conta_id, l.centro_custo_id, CASE WHEN l.tipo = 'ESTORNO' THEN -l.valor ELSE l.valor END
+    FROM lancamentos_cartao l JOIN cartoes_credito k ON k.id = l.cartao_id LEFT JOIN fornecedores f ON f.id = l.fornecedor_id
+   WHERE l.empresa_id = $1 AND l.data BETWEEN $2 AND $3
+  UNION ALL ${SQL_AVULSAS}`;
+
+/**
+ * Caixa: baixas pela data e pelo valor pago (com juros, multa e desconto). O pagamento de uma fatura de cartão
+ * é dividido entre as categorias e centros de custo das compras dela, na proporção do valor líquido de cada um.
+ */
+const SQL_CAIXA = `
+  WITH pagamentos_fatura AS (
+         SELECT b.data, c.id AS conta_id, c.descricao, c.fatura_cartao_id AS fatura_id, b.valor_total AS pago
            FROM baixas b JOIN contas_pagar c ON c.id = b.conta_pagar_id
-          WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NOT NULL
-          GROUP BY c.fatura_cartao_id),
-       por_categoria AS (
-         SELECT fatura_id, plano_conta_id, SUM(CASE WHEN tipo = 'ESTORNO' THEN -valor ELSE valor END) AS liquido
-           FROM lancamentos_cartao WHERE fatura_id IN (SELECT fatura_id FROM pagamentos)
-          GROUP BY fatura_id, plano_conta_id),
-       totais AS (SELECT fatura_id, SUM(liquido) AS total FROM por_categoria GROUP BY fatura_id)
-  SELECT pc.plano_conta_id, p.pago * pc.liquido / t.total AS valor
-    FROM pagamentos p JOIN por_categoria pc USING (fatura_id) JOIN totais t USING (fatura_id)
-   WHERE t.total > 0`;
+          WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NOT NULL),
+       por_grupo AS (
+         SELECT fatura_id, plano_conta_id, centro_custo_id, SUM(CASE WHEN tipo = 'ESTORNO' THEN -valor ELSE valor END) AS liquido
+           FROM lancamentos_cartao WHERE fatura_id IN (SELECT fatura_id FROM pagamentos_fatura)
+          GROUP BY fatura_id, plano_conta_id, centro_custo_id),
+       totais AS (SELECT fatura_id, SUM(liquido) AS total FROM por_grupo GROUP BY fatura_id)
+  SELECT b.data AS data, 'RECEITA' AS tipo, 'CONTA_RECEBER' AS origem, c.id AS referencia,
+         c.descricao AS descricao, p.nome AS pessoa, c.plano_conta_id, c.centro_custo_id, b.valor_total AS valor
+    FROM baixas b JOIN contas_receber c ON c.id = b.conta_receber_id JOIN clientes p ON p.id = c.cliente_id
+   WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3
+  UNION ALL
+  SELECT b.data, 'DESPESA', 'CONTA_PAGAR', c.id, c.descricao, f.nome, c.plano_conta_id, c.centro_custo_id, b.valor_total
+    FROM baixas b JOIN contas_pagar c ON c.id = b.conta_pagar_id JOIN fornecedores f ON f.id = c.fornecedor_id
+   WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NULL
+  UNION ALL
+  SELECT pf.data, 'DESPESA', 'FATURA', pf.conta_id, pf.descricao, NULL, g.plano_conta_id, g.centro_custo_id, pf.pago * g.liquido / t.total
+    FROM pagamentos_fatura pf JOIN por_grupo g USING (fatura_id) JOIN totais t USING (fatura_id)
+   WHERE t.total > 0
+  UNION ALL ${SQL_AVULSAS}`;
+
+export type OrigemLancamento = 'CONTA_RECEBER' | 'CONTA_PAGAR' | 'CARTAO' | 'FATURA' | 'AVULSA';
+
+interface LinhaResultado {
+  data: string;
+  tipo: TipoPlanoConta;
+  origem: OrigemLancamento;
+  /** Conta a receber/pagar, compra no cartão ou movimentação avulsa. */
+  referencia: string;
+  descricao: string;
+  pessoa: string | null;
+  plano_conta_id: string | null;
+  centro_custo_id: string | null;
+  valor: string;
+}
+
+/** Lançamentos que o resumo de um centro de custo devolve, no máximo. Os totais consideram todos. */
+const MAXIMO_LANCAMENTOS = 1000;
 
 interface Linha {
   data: string;
@@ -70,6 +128,7 @@ export class RelatoriosService {
     private readonly movimentacoes: MovimentacoesService,
     private readonly planoContas: PlanoContasService,
     private readonly contasBancarias: ContasBancariasService,
+    private readonly centrosCusto: CentrosCustoService,
   ) {}
 
   /**
@@ -153,46 +212,37 @@ export class RelatoriosService {
     };
   }
 
+  /**
+   * Cada lançamento que compõe o resultado do período, com categoria e centro de custo. O DRE é a soma destas
+   * linhas; o resumo de um centro de custo as lista.
+   */
+  private async lancamentosDoResultado(empresaId: string, filtro: DreDto) {
+    const { de, ate } = filtro;
+    if (ate < de) throw new BadRequestException('ate não pode ser anterior a de');
+    if (filtro.centroCustoId) await this.centrosCusto.findOne(empresaId, filtro.centroCustoId);
+    const linhas: LinhaResultado[] = await this.dataSource.query(
+      `SELECT data::text AS data, tipo, origem, referencia, descricao, pessoa, plano_conta_id, centro_custo_id,
+              ROUND(valor, 2)::text AS valor
+         FROM (${filtro.regime === 'caixa' ? SQL_CAIXA : SQL_COMPETENCIA}) r (data, tipo, origem, referencia, descricao, pessoa, plano_conta_id, centro_custo_id, valor)
+        WHERE $4::uuid IS NULL OR centro_custo_id = $4
+        ORDER BY data DESC, tipo DESC, descricao`,
+      [empresaId, de, ate, filtro.centroCustoId ?? null],
+    );
+    return linhas;
+  }
+
   /** Demonstrativo de resultado: valores por categoria do plano de contas, somados até as contas sintéticas. */
   async dre(empresaId: string, filtro: DreDto) {
-    const { de, ate } = filtro;
     const regime = filtro.regime ?? 'competencia';
-    if (ate < de) throw new BadRequestException('ate não pode ser anterior a de');
+    const [linhas, plano] = await Promise.all([
+      this.lancamentosDoResultado(empresaId, { ...filtro, regime }),
+      this.planoContas.findAll(empresaId, {}),
+    ]);
+    return { de: filtro.de, ate: filtro.ate, regime, centroCustoId: filtro.centroCustoId ?? null, ...this.somarPorCategoria(linhas, plano) };
+  }
 
-    const porContas =
-      regime === 'competencia'
-        ? `SELECT 'RECEITA' AS tipo, plano_conta_id, SUM(valor) AS valor FROM contas_receber
-            WHERE empresa_id = $1 AND status <> 'CANCELADA' AND data_emissao BETWEEN $2 AND $3 GROUP BY plano_conta_id
-           UNION ALL
-           SELECT 'DESPESA', plano_conta_id, SUM(valor) FROM contas_pagar
-            WHERE empresa_id = $1 AND status <> 'CANCELADA' AND data_emissao BETWEEN $2 AND $3
-              AND fatura_cartao_id IS NULL
-            GROUP BY plano_conta_id
-           UNION ALL
-           SELECT 'DESPESA', plano_conta_id, SUM(CASE WHEN tipo = 'ESTORNO' THEN -valor ELSE valor END) FROM lancamentos_cartao
-            WHERE empresa_id = $1 AND data BETWEEN $2 AND $3 GROUP BY plano_conta_id`
-        : `SELECT 'RECEITA' AS tipo, c.plano_conta_id, SUM(b.valor_total) AS valor
-             FROM baixas b JOIN contas_receber c ON c.id = b.conta_receber_id
-            WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 GROUP BY c.plano_conta_id
-           UNION ALL
-           SELECT 'DESPESA', c.plano_conta_id, SUM(b.valor_total)
-             FROM baixas b JOIN contas_pagar c ON c.id = b.conta_pagar_id
-            WHERE b.empresa_id = $1 AND b.data BETWEEN $2 AND $3 AND c.fatura_cartao_id IS NULL
-            GROUP BY c.plano_conta_id
-           UNION ALL
-           SELECT 'DESPESA', plano_conta_id, SUM(valor) FROM (${SQL_PAGAMENTO_FATURAS_POR_CATEGORIA}) faturas
-            GROUP BY plano_conta_id`;
-    const linhas: { tipo: TipoPlanoConta; plano_conta_id: string | null; valor: string }[] = await this.dataSource.query(
-      `${porContas}
-       UNION ALL
-       SELECT CASE WHEN tipo = 'ENTRADA' THEN 'RECEITA' ELSE 'DESPESA' END, plano_conta_id, SUM(valor)
-         FROM movimentacoes_bancarias
-        WHERE empresa_id = $1 AND origem = 'AVULSA' AND data BETWEEN $2 AND $3
-        GROUP BY tipo, plano_conta_id`,
-      [empresaId, de, ate],
-    );
-
-    const plano = await this.planoContas.findAll(empresaId, {});
+  /** Soma as linhas em cada categoria e nas categorias acima dela; sem categoria vai à parte. */
+  private somarPorCategoria(linhas: LinhaResultado[], plano: PlanoConta[]) {
     const pais = new Map(plano.map((c) => [c.id, c.contaPaiId]));
     const valores = new Map<string, number>();
     const semCategoria = { [TipoPlanoConta.RECEITA]: 0, [TipoPlanoConta.DESPESA]: 0 };
@@ -224,14 +274,50 @@ export class RelatoriosService {
     const despesas = totalDoTipo(TipoPlanoConta.DESPESA);
 
     return {
-      de,
-      ate,
-      regime,
       contas,
       semCategoria: { receitas: reais(semCategoria.RECEITA), despesas: reais(semCategoria.DESPESA) },
       receitas: reais(receitas),
       despesas: reais(despesas),
       resultado: reais(receitas - despesas),
+    };
+  }
+
+  /**
+   * Resultado de um centro de custo (um serviço, projeto ou loja): o DRE só com os lançamentos dele, a lista
+   * desses lançamentos e o saldo das contas dele que ainda estão em aberto, de qualquer vencimento.
+   */
+  async resumoCentroCusto(empresaId: string, id: string, filtro: ResumoCentroCustoDto) {
+    const centro = await this.centrosCusto.findOne(empresaId, id);
+    const regime = filtro.regime ?? 'competencia';
+    const [linhas, plano, aReceber, aPagar] = await Promise.all([
+      this.lancamentosDoResultado(empresaId, { ...filtro, regime, centroCustoId: id }),
+      this.planoContas.findAll(empresaId, {}),
+      this.dataSource.query(`${SQL_EM_ABERTO('contas_receber', 'conta_receber_id')} AND c.centro_custo_id = $2`, [empresaId, id]) as Promise<Linha[]>,
+      this.dataSource.query(`${SQL_EM_ABERTO('contas_pagar', 'conta_pagar_id')} AND c.centro_custo_id = $2`, [empresaId, id]) as Promise<Linha[]>,
+    ]);
+    const categorias = new Map(plano.map((c) => [c.id, { codigo: c.codigo, nome: c.nome }]));
+    const soma = (linhas: Linha[]) => reais(linhas.reduce((s, l) => s + centavos(l.valor), 0));
+    const dre = this.somarPorCategoria(linhas, plano);
+    return {
+      centroCusto: { id: centro.id, nome: centro.nome, descricao: centro.descricao, ativo: centro.ativo },
+      de: filtro.de,
+      ate: filtro.ate,
+      regime,
+      ...dre,
+      /** Lucro sobre a receita, em %; sem receita no período, não se aplica. */
+      margem: dre.receitas > 0 ? Math.round((dre.resultado / dre.receitas) * 1000) / 10 : null,
+      emAberto: { receber: soma(aReceber), pagar: soma(aPagar) },
+      totalLancamentos: linhas.length,
+      lancamentos: linhas.slice(0, MAXIMO_LANCAMENTOS).map((l) => ({
+        data: l.data,
+        tipo: l.tipo,
+        origem: l.origem,
+        referencia: l.referencia,
+        descricao: l.descricao,
+        pessoa: l.pessoa,
+        categoria: l.plano_conta_id ? (categorias.get(l.plano_conta_id) ?? null) : null,
+        valor: reais(centavos(l.valor)),
+      })),
     };
   }
 }

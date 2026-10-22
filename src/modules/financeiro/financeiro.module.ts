@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CentrosCustoModule } from '../centros-custo/centros-custo.module';
 import { ContasBancariasModule } from '../contas-bancarias/contas-bancarias.module';
 import { MovimentacoesModule } from '../movimentacoes/movimentacoes.module';
 import { PlanoContasModule } from '../plano-contas/plano-contas.module';
@@ -9,7 +10,7 @@ import { RelatoriosService } from './relatorios.service';
 
 /** Baixas de contas a receber e a pagar, e os relatórios financeiros (fluxo de caixa e DRE). */
 @Module({
-  imports: [TypeOrmModule.forFeature([Baixa]), MovimentacoesModule, PlanoContasModule, ContasBancariasModule],
+  imports: [TypeOrmModule.forFeature([Baixa]), MovimentacoesModule, PlanoContasModule, ContasBancariasModule, CentrosCustoModule],
   controllers: [RelatoriosController],
   providers: [RelatoriosService],
 })

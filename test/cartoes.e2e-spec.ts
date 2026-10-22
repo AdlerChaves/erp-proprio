@@ -251,6 +251,24 @@ describe('Cartões de crédito', () => {
     });
   });
 
+  describe('centro de custo', () => {
+    it('cada compra entra no centro dela; o pagamento da fatura é rateado entre os centros', async () => {
+      const obra = (await api(app, a.token).post('/centros-custo', { nome: 'Obra A' }).expect(201)).body.id;
+      const loja = (await api(app, a.token).post('/centros-custo', { nome: 'Loja' }).expect(201)).body.id;
+      await lancar({ valor: 300, descricao: 'Tinta', planoContaId: plano['2.03.04'], centroCustoId: obra }).expect(201);
+      await lancar({ valor: 100, planoContaId: plano['2.03.04'], centroCustoId: loja }).expect(201);
+      const [conta] = await contas();
+      await api(app, a.token).post(`/contas-pagar/${conta.id}/baixas`, { contaBancariaId: banco, valor: 200, data: '2026-11-05' }).expect(201);
+
+      const competencia = await api(app, a.token).get(`/financeiro/centros-custo/${obra}/resumo?de=2026-10-01&ate=2026-10-31`).expect(200);
+      expect(competencia.body).toMatchObject({ despesas: 300, lancamentos: [{ origem: 'CARTAO', descricao: 'Tinta', valor: 300 }] });
+      const caixa = await api(app, a.token).get(`/financeiro/centros-custo/${obra}/resumo?de=2026-11-01&ate=2026-11-30&regime=caixa`).expect(200);
+      expect(caixa.body).toMatchObject({ despesas: 150, lancamentos: [{ origem: 'FATURA', descricao: expect.stringMatching(/^Fatura Itaú Visa/), valor: 150 }] });
+      const daLoja = await api(app, a.token).get(`/financeiro/centros-custo/${loja}/resumo?de=2026-11-01&ate=2026-11-30&regime=caixa`).expect(200);
+      expect(daLoja.body.despesas).toBe(50);
+    });
+  });
+
   describe('acesso', () => {
     it('consulta lê, vendas não acessa, e outra empresa não vê o cartão', async () => {
       const consulta = await adicionarUsuario(app, a, Perfil.CONSULTA);

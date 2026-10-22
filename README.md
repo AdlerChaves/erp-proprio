@@ -44,7 +44,8 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento), orçamento, pedido de venda e pedido de compra em PDF, e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
-- Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa.
+- Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa, filtrável por centro de custo.
+- Centros de custo: ao clicar em um (serviço, projeto, loja), um modal mostra o resultado dele no período: receitas, despesas, lucro, margem, valores em aberto, as categorias e os lançamentos.
 - Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo. O cliente pode ser cadastrado sem CPF/CNPJ para receber uma proposta; o fornecedor, não.
 - Administração: dados da empresa (inclusive contato e endereço, que vão nos PDFs) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
 - Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
@@ -149,7 +150,8 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
 | POST | `/api/estoque/ajustes` | Entrada ou saída manual com motivo (`ADMIN`/`FINANCEIRO`) |
 | GET | `/api/financeiro/fluxo-caixa?de=&ate=&agrupamento=mes\|dia` | Realizado e previsto por período, saldo acumulado e contas em atraso |
-| GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa` | Resultado por categoria, somado até as contas sintéticas |
+| GET | `/api/financeiro/dre?de=&ate=&regime=competencia\|caixa&centroCustoId=` | Resultado por categoria, somado até as contas sintéticas; opcionalmente de um centro de custo |
+| GET | `/api/financeiro/centros-custo/:id/resumo?de=&ate=&regime=` | Resultado de um centro de custo: categorias, margem, lançamentos do período e contas dele em aberto |
 
 Regras dos cadastros:
 
@@ -228,7 +230,8 @@ Nota fiscal de serviço (NFS-e):
 Relatórios:
 
 - **Fluxo de caixa**: contas bancárias abertas dentro do período entram com o saldo inicial no período da abertura (`aberturas`). Realizado são as movimentações bancárias (sem transferências, que não mudam o caixa da empresa); previsto é o saldo em aberto das contas pelo vencimento. O saldo de cada período acumula os dois a partir do saldo bancário na véspera de `de`.
-- **DRE**: por competência, contas não canceladas pela data de emissão e pelo valor original; por caixa, baixas pela data e pelo valor pago. Nos dois regimes entram as movimentações avulsas com categoria. Valores sem categoria aparecem em `semCategoria`.
+- **DRE**: por competência, contas não canceladas pela data de emissão e pelo valor original; por caixa, baixas pela data e pelo valor pago. Nos dois regimes entram as movimentações avulsas com categoria. Valores sem categoria aparecem em `semCategoria`. Filtrado por centro de custo, entram só os lançamentos dele; no regime de caixa, o pagamento de uma fatura de cartão é rateado entre os centros (e categorias) das compras, na proporção do valor de cada uma.
+- **Resumo do centro de custo**: o mesmo cálculo do DRE, mais a lista dos lançamentos que o compõem (até 1.000, os mais recentes; os totais consideram todos), a margem (lucro sobre a receita) e o saldo das contas do centro ainda em aberto, de qualquer vencimento.
 - Um registro usado por outro (ex.: cliente com contas a receber) não pode ser removido: a API responde 409. Prefira desativar com `ativo: false`.
 
 ## Testes
@@ -250,7 +253,7 @@ npm run test:e2e
 | `test/contas-receber.e2e-spec.ts` | Plano de contas padrão, categoria e centro de custo, baixa com conta bancária, datas e estados da conta |
 | `test/contas-pagar.e2e-spec.ts` | As mesmas regras para contas a pagar, mais isolamento e permissões |
 | `test/movimentacoes.e2e-spec.ts` | Baixa e estorno com movimentação, avulsas, transferências, saldo, extrato, isolamento e permissões |
-| `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa e DRE |
+| `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa, DRE e resumo por centro de custo |
 | `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
 | `test/conciliacao.e2e-spec.ts` | Leitura de OFX (SGML/XML, codificações, sinais), importação sem duplicar, conciliação automática e disputas, ações por linha, baixa com juros/desconto, saldo, perfis e isolamento |
 | `test/documentos.e2e-spec.ts` | Textos do PDF (moeda, documentos, endereço, parcelas), PDF válido com várias páginas, título e nome por situação, contato da empresa, perfis e isolamento |

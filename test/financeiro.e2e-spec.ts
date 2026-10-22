@@ -350,6 +350,90 @@ describe('Financeiro: baixas parciais, parcelamento, fluxo de caixa e DRE', () =
     });
   });
 
+  describe('resumo por centro de custo', () => {
+    let obra: string;
+    let outro: string;
+    beforeEach(async () => {
+      obra = (await api(app, a.token).post('/centros-custo', { nome: 'Reforma Padaria Centro' }).expect(201)).body.id;
+      outro = (await api(app, a.token).post('/centros-custo', { nome: 'Manutenção Mercado' }).expect(201)).body.id;
+      const emMaio = { dataEmissao: '2026-05-10', dataVencimento: '2026-06-10', centroCustoId: obra };
+      const servico = await receber({ ...emMaio, descricao: 'Reforma - entrada', valor: 1000, planoContaId: plano['1.02'] });
+      await receber({ ...emMaio, descricao: 'Reforma - final', valor: 500 });
+      const material = await pagar({ ...emMaio, descricao: 'Cimento e areia', valor: 300, planoContaId: plano['2.03.01'] });
+      await pagar({ dataEmissao: '2026-05-12', dataVencimento: '2026-06-12', valor: 999, centroCustoId: outro, planoContaId: plano['2.03.01'] });
+      await pagar({ dataEmissao: '2026-05-12', dataVencimento: '2026-06-12', valor: 50, planoContaId: plano['2.03.01'] });
+      await api(app, a.token)
+        .post('/movimentacoes', { contaBancariaId: banco, tipo: 'SAIDA', valor: 40, descricao: 'Frete da caçamba', data: '2026-05-20', planoContaId: plano['2.06.01'], centroCustoId: obra })
+        .expect(201);
+      await baixar('receber', servico.id, { valor: 600, juros: 6, data: '2026-05-25' }).expect(201);
+      await baixar('pagar', material.id, { data: '2026-05-26' }).expect(201);
+    });
+    const resumo = (centro: string, consulta = 'de=2026-05-01&ate=2026-05-31') =>
+      api(app, a.token).get(`/financeiro/centros-custo/${centro}/resumo?${consulta}`);
+
+    it('competência: só os lançamentos do centro, por categoria, com margem, lista e o que está em aberto', async () => {
+      const { body } = await resumo(obra).expect(200);
+      expect(body).toMatchObject({
+        centroCusto: { id: obra, nome: 'Reforma Padaria Centro', ativo: true },
+        regime: 'competencia',
+        receitas: 1500,
+        despesas: 340,
+        resultado: 1160,
+        margem: 77.3,
+        semCategoria: { receitas: 500, despesas: 0 },
+        // 1000 − 600 baixados do serviço, mais os 500 da parcela final; o material já foi pago.
+        emAberto: { receber: 900, pagar: 0 },
+        totalLancamentos: 4,
+      });
+      expect(body.contas.map((c: { codigo: string; valor: number }) => [c.codigo, c.valor])).toEqual([
+        ['1', 1000],
+        ['1.02', 1000],
+        ['2', 340],
+        ['2.03', 300],
+        ['2.03.01', 300],
+        ['2.06', 40],
+        ['2.06.01', 40],
+      ]);
+      expect(body.lancamentos.map((l: { data: string; tipo: string; origem: string; descricao: string; valor: number }) => [l.data, l.tipo, l.origem, l.descricao, l.valor])).toEqual([
+        ['2026-05-20', 'DESPESA', 'AVULSA', 'Frete da caçamba', 40],
+        ['2026-05-10', 'RECEITA', 'CONTA_RECEBER', 'Reforma - entrada', 1000],
+        ['2026-05-10', 'RECEITA', 'CONTA_RECEBER', 'Reforma - final', 500],
+        ['2026-05-10', 'DESPESA', 'CONTA_PAGAR', 'Cimento e areia', 300],
+      ]);
+      expect(body.lancamentos[1]).toMatchObject({ pessoa: expect.stringMatching(/^Cliente/), categoria: { codigo: '1.02' } });
+      expect(body.lancamentos[2].categoria).toBeNull();
+    });
+
+    it('caixa: pelo valor pago na data do pagamento', async () => {
+      const { body } = await resumo(obra, 'de=2026-05-01&ate=2026-05-31&regime=caixa').expect(200);
+      expect(body).toMatchObject({ regime: 'caixa', receitas: 606, despesas: 340, resultado: 266, totalLancamentos: 3 });
+      const semReceita = await resumo(obra, 'de=2026-05-26&ate=2026-05-31&regime=caixa').expect(200);
+      expect(semReceita.body).toMatchObject({ receitas: 0, despesas: 300, resultado: -300, margem: null });
+    });
+
+    it('o DRE filtrado pelo centro bate com o resumo; sem filtro, soma todos', async () => {
+      const filtrado = await api(app, a.token).get(`/financeiro/dre?de=2026-05-01&ate=2026-05-31&centroCustoId=${obra}`).expect(200);
+      expect(filtrado.body).toMatchObject({ centroCustoId: obra, receitas: 1500, despesas: 340 });
+      const todos = await api(app, a.token).get('/financeiro/dre?de=2026-05-01&ate=2026-05-31').expect(200);
+      expect(todos.body).toMatchObject({ centroCustoId: null, receitas: 1500, despesas: 1389 });
+      expect((await resumo(outro).expect(200)).body).toMatchObject({ receitas: 0, despesas: 999, totalLancamentos: 1 });
+    });
+
+    it('valida o período e o centro; outra empresa e o perfil vendas não veem', async () => {
+      await resumo(obra, 'de=2026-05-31&ate=2026-05-01').expect(400);
+      await resumo(obra, 'de=2026-05-01').expect(400);
+      await resumo('00000000-0000-4000-8000-000000000000').expect(404);
+      await api(app, a.token).get('/financeiro/dre?de=2026-05-01&ate=2026-05-31&centroCustoId=xyz').expect(400);
+      const b = await registrarEmpresa(app);
+      await api(app, b.token).get(`/financeiro/centros-custo/${obra}/resumo?de=2026-05-01&ate=2026-05-31`).expect(404);
+      await api(app, b.token).get(`/financeiro/dre?de=2026-05-01&ate=2026-05-31&centroCustoId=${obra}`).expect(404);
+      const vendas = await adicionarUsuario(app, a, Perfil.VENDAS);
+      await api(app, vendas.token).get(`/financeiro/centros-custo/${obra}/resumo?de=2026-05-01&ate=2026-05-31`).expect(403);
+      const consulta = await adicionarUsuario(app, a, Perfil.CONSULTA);
+      await api(app, consulta.token).get(`/financeiro/centros-custo/${obra}/resumo?de=2026-05-01&ate=2026-05-31`).expect(200);
+    });
+  });
+
   describe('permissões dos relatórios', () => {
     it.each([
       [Perfil.VENDAS, 403],

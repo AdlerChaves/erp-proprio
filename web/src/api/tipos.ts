@@ -215,11 +215,36 @@ export interface Dre {
   de: string;
   ate: string;
   regime: RegimeDre;
+  centroCustoId: string | null;
   contas: { id: string; codigo: string; nome: string; tipo: TipoPlanoConta; nivel: number; valor: number }[];
   semCategoria: { receitas: number; despesas: number };
   receitas: number;
   despesas: number;
   resultado: number;
+}
+
+/** De onde vem um lançamento do resultado. */
+export type OrigemLancamento = 'CONTA_RECEBER' | 'CONTA_PAGAR' | 'CARTAO' | 'FATURA' | 'AVULSA';
+
+export interface LancamentoResultado {
+  data: string;
+  tipo: TipoPlanoConta;
+  origem: OrigemLancamento;
+  referencia: string;
+  descricao: string;
+  pessoa: string | null;
+  categoria: { codigo: string; nome: string } | null;
+  valor: number;
+}
+
+export interface ResumoCentroCusto extends Omit<Dre, 'centroCustoId'> {
+  centroCusto: { id: string; nome: string; descricao: string | null; ativo: boolean };
+  /** Lucro sobre a receita, em %; null sem receita no período. */
+  margem: number | null;
+  /** Saldo das contas deste centro ainda em aberto, de qualquer vencimento. */
+  emAberto: { receber: number; pagar: number };
+  totalLancamentos: number;
+  lancamentos: LancamentoResultado[];
 }
 
 export interface UsuarioDaEmpresa {

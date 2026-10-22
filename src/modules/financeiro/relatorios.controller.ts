@@ -1,9 +1,9 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
 import { Perfil } from '../usuarios/perfil.enum';
-import { DreDto } from './dto/dre.dto';
+import { DreDto, ResumoCentroCustoDto } from './dto/dre.dto';
 import { FluxoCaixaDto } from './dto/fluxo-caixa.dto';
 import { RelatoriosService } from './relatorios.service';
 
@@ -22,5 +22,15 @@ export class RelatoriosController {
   @Get('dre')
   dre(@SessaoAtual() sessao: Sessao, @Query() filtro: DreDto) {
     return this.service.dre(sessao.empresaId, filtro);
+  }
+
+  /** Resultado de um centro de custo no período: categorias, lançamentos e o que ainda está em aberto. */
+  @Get('centros-custo/:id/resumo')
+  resumoCentroCusto(
+    @SessaoAtual() sessao: Sessao,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() filtro: ResumoCentroCustoDto,
+  ) {
+    return this.service.resumoCentroCusto(sessao.empresaId, id, filtro);
   }
 }

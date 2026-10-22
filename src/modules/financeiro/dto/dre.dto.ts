@@ -1,4 +1,5 @@
-import { IsDateString, IsIn, IsOptional } from 'class-validator';
+import { OmitType } from '@nestjs/swagger';
+import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 
 export class DreDto {
   @IsDateString({ strict: true })
@@ -15,4 +16,11 @@ export class DreDto {
   @IsOptional()
   @IsIn(['competencia', 'caixa'])
   regime?: 'competencia' | 'caixa';
+
+  /** Só os lançamentos deste centro de custo (serviço, projeto, loja). */
+  @IsOptional()
+  @IsUUID()
+  centroCustoId?: string;
 }
+
+export class ResumoCentroCustoDto extends OmitType(DreDto, ['centroCustoId'] as const) {}
