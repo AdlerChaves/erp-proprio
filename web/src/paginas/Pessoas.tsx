@@ -2,10 +2,11 @@ import { ActionIcon, Badge, Button, Card, Divider, Grid, Group, Loader, Menu, Mo
 import { useForm } from '@mantine/form';
 import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { api } from '../api/cliente';
-import type { DadosCnpj, Pessoa } from '../api/tipos';
+import type { DadosCep, DadosCnpj, Pessoa } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { CampoCep, enderecoDoCep } from '../componentes/Cep';
 import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao, type Permissao } from '../sessao/sessao';
@@ -97,6 +98,12 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
     });
   };
   const cnpj = useBuscaCnpj(preencher);
+  const numero = useRef<HTMLInputElement>(null);
+  /** Rua, bairro e município pelo CEP; o número ninguém informa, então o cursor vai para ele. */
+  const preencherCep = (d: DadosCep) => {
+    form.setValues(enderecoDoCep(d, form.values));
+    if (d.logradouro) numero.current?.focus();
+  };
 
   const salvar = useMutation({
     mutationFn: (v: typeof form.values) => {
@@ -161,7 +168,7 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
             <Divider label="Para a nota fiscal de serviço (opcional)" labelPosition="left" />
             <Grid>
               <Grid.Col span={{ base: 12, sm: 4 }}>
-                <TextInput label="CEP" placeholder="00000-000" {...form.getInputProps('cep')} />
+                <CampoCep label="CEP" {...form.getInputProps('cep')} aoEncontrar={preencherCep} />
               </Grid.Col>
               <Grid.Col span={{ base: 12, sm: 8 }}>
                 <CampoMunicipio label="Município" {...form.getInputProps('codigoMunicipio')} />
@@ -170,7 +177,7 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
                 <TextInput label="Rua" {...form.getInputProps('logradouro')} />
               </Grid.Col>
               <Grid.Col span={{ base: 12, sm: 4 }}>
-                <TextInput label="Número" {...form.getInputProps('numero')} />
+                <TextInput label="Número" ref={numero} {...form.getInputProps('numero')} />
               </Grid.Col>
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <TextInput label="Complemento" {...form.getInputProps('complemento')} />

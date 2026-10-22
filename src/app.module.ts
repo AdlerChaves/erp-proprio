@@ -11,6 +11,7 @@ import { CentrosCustoModule } from './modules/centros-custo/centros-custo.module
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { ComprasModule } from './modules/compras/compras.module';
 import { ConciliacaoModule } from './modules/conciliacao/conciliacao.module';
+import { ConsultaCepModule } from './modules/consulta-cep/consulta-cep.module';
 import { ConsultaCnpjModule } from './modules/consulta-cnpj/consulta-cnpj.module';
 import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancarias.module';
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
@@ -53,6 +54,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     ComprasModule,
     NfseModule,
     ConsultaCnpjModule,
+    ConsultaCepModule,
     CartoesModule,
     ConciliacaoModule,
   ],

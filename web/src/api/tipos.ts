@@ -379,6 +379,17 @@ export interface NotaServico {
 }
 
 /** Dados públicos do CNPJ (Receita Federal), já no formato do cadastro. */
+/** Endereço do CEP (ViaCEP ou BrasilAPI, pela nossa API). */
+export interface DadosCep {
+  cep: string;
+  /** Vazios em CEP geral de município. */
+  logradouro: string;
+  bairro: string;
+  codigoMunicipio: string | null;
+  municipio: { nome: string; uf: string } | null;
+  fonte: string;
+}
+
 export interface DadosCnpj {
   cnpj: string;
   razaoSocial: string;

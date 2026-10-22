@@ -24,7 +24,11 @@ const SERVICO_POR_CODIGO = new Map(SERVICOS.map((s) => [s.codigo, s]));
 /** Sem acento e em minúsculas, para a busca não depender de como o usuário digita. */
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+const POR_NOME = new Map(MUNICIPIOS.map((m) => [`${normalizar(m.nome)}|${m.uf}`, m]));
+
 export const municipio = (codigo: string) => POR_CODIGO.get(codigo);
+/** Pelo nome e UF, sem depender de acentos ou maiúsculas ("SAO PAULO", "São Paulo"). */
+export const municipioPorNome = (nome: string, uf: string) => POR_NOME.get(`${normalizar(nome.trim())}|${uf.trim().toUpperCase()}`);
 export const servicoNacional = (codigo: string) => SERVICO_POR_CODIGO.get(codigo);
 
 export function buscarMunicipios(busca = '', uf?: string, limite = 30) {

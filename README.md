@@ -40,6 +40,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Acesso: login, cadastro da empresa, escolha e troca de empresa, troca de senha (encerra as outras sessões), saída deste ou de todos os dispositivos.
 - Cartões de crédito: cartão ligado a uma conta bancária e ao emissor; lançamentos (à vista, parcelados e estornos) por fatura, com datas de fechamento e vencimento ajustáveis mês a mês, fechamento conferido com o banco e pagamento pela conta a pagar da fatura.
 - Conciliação bancária: importa o extrato OFX do banco, concilia sozinho o que bate, sugere movimentações e contas em aberto pelo valor, lança tarifas e rendimentos como avulsos, ignora linhas que se anulam e compara o saldo do banco com o do sistema.
+- Consulta de CEP: ao completar o CEP no endereço do cliente ou da empresa (ou pelo botão de busca), rua, bairro e município são preenchidos e o cursor vai para o número.
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, baixa o XML e registra o número da NFS-e emitida no portal da prefeitura.
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento), orçamento, pedido de venda e pedido de compra em PDF, e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
@@ -142,6 +143,7 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | POST | `/api/conciliacao/automatica/:contaBancariaId` | Roda de novo a conciliação automática nas linhas pendentes |
 | POST/DELETE | `/api/conciliacao/linhas/:id/conciliacao` | Liga a linha a uma movimentação, ou desfaz |
 | POST | `/api/conciliacao/linhas/:id/ignorar` · `/avulsa` · `/baixa` | Ignora a linha, lança uma avulsa ou baixa uma conta a receber/pagar já conciliada |
+| GET | `/api/cep/:cep` | Endereço do CEP (ViaCEP, com a BrasilAPI como reserva), com o código IBGE do município |
 | GET | `/api/cnpj/:cnpj` | Dados públicos do CNPJ na Receita Federal (BrasilAPI, com a Minha Receita como reserva), no formato do cadastro |
 | GET | `/api/estoque` | Por produto: estoque, reservado, disponível, custo médio e valor |
 | GET | `/api/estoque/movimentacoes?produtoId=&vendaId=&compraId=&de=&ate=` | Kardex, com o saldo após cada movimentação |
@@ -203,6 +205,12 @@ Orçamentos e pedidos em PDF:
 - O título acompanha a situação: orçamento, pedido de venda (com linha de "De acordo" do cliente), venda faturada ou pedido de compra; cancelado leva marca-d'água. As condições de pagamento vêm das contas lançadas ou, antes disso, da previsão de parcelas.
 - O cabeçalho usa nome fantasia, razão social, CNPJ, inscrição municipal, endereço, telefone e e-mail da empresa. O PDF é gerado no servidor (pdfmake, fonte Helvetica embutida, sem acesso a arquivos ou URLs).
 
+Consulta de CEP:
+
+- Também passa pela API. Fontes: ViaCEP e, se ela falhar ou não tiver o CEP, BrasilAPI; só é 404 quando nenhuma acha, e 503 com orientação para preencher à mão quando as duas estão fora do ar.
+- O município vem pelo código IBGE (ou, sem ele, pelo nome e UF na tabela da NFS-e). Número e complemento não vêm: o complemento da ViaCEP é a faixa de numeração do CEP, não o do endereço. CEP geral de município traz só a cidade.
+- Cache em memória de 30 dias e limite próprio por IP (`THROTTLE_CEP_LIMITE`, padrão 60 por minuto).
+
 Consulta de CNPJ:
 
 - A consulta passa pela API, nunca direto do navegador (a CSP só permite a própria origem). Fontes gratuitas dos dados abertos da Receita: BrasilAPI e, se ela falhar, Minha Receita. CNPJ inexistente responde 404; as duas fora do ar, 503 com orientação para preencher manualmente.
@@ -246,6 +254,7 @@ npm run test:e2e
 | `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
 | `test/conciliacao.e2e-spec.ts` | Leitura de OFX (SGML/XML, codificações, sinais), importação sem duplicar, conciliação automática e disputas, ações por linha, baixa com juros/desconto, saldo, perfis e isolamento |
 | `test/documentos.e2e-spec.ts` | Textos do PDF (moeda, documentos, endereço, parcelas), PDF válido com várias páginas, título e nome por situação, contato da empresa, perfis e isolamento |
+| `test/consulta-cep.e2e-spec.ts` | Conversão das duas fontes, município pelo código ou pelo nome, CEP geral, reserva, não encontrado, fontes fora do ar, validação e cache, com as fontes simuladas |
 | `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |

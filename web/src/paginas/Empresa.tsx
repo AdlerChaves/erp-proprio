@@ -2,11 +2,12 @@ import { Alert, Badge, Button, Card, Grid, Group, Loader, Modal, NumberInput, Se
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
-import type { Empresa as DadosEmpresa, RegimeTributario } from '../api/tipos';
+import type { DadosCep, Empresa as DadosEmpresa, RegimeTributario } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, ErroCarregamento } from '../componentes/comum';
+import { CampoCep, enderecoDoCep } from '../componentes/Cep';
 import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
@@ -101,6 +102,11 @@ function FormContato({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEdita
     });
     avisarSucesso('Contato e endereço preenchidos pela Receita; confira e salve');
   });
+  const numero = useRef<HTMLInputElement>(null);
+  const preencherCep = (d: DadosCep) => {
+    form.setValues(enderecoDoCep(d, form.values));
+    if (d.logradouro) numero.current?.focus();
+  };
   const salvar = useMutation({
     mutationFn: (v: typeof form.values) =>
       api.patch<DadosEmpresa>('/empresas/atual', {
@@ -146,7 +152,7 @@ function FormContato({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEdita
             <TextInput label="E-mail" type="email" disabled={!podeEditar} {...form.getInputProps('email')} />
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
-            <TextInput label="CEP" placeholder="00000-000" disabled={!podeEditar} {...form.getInputProps('cep')} />
+            <CampoCep label="CEP" disabled={!podeEditar} {...form.getInputProps('cep')} aoEncontrar={preencherCep} />
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 8 }}>
             <CampoMunicipio label="Município" disabled={!podeEditar} {...form.getInputProps('codigoMunicipio')} />
@@ -155,7 +161,7 @@ function FormContato({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEdita
             <TextInput label="Rua" disabled={!podeEditar} {...form.getInputProps('logradouro')} />
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
-            <TextInput label="Número" disabled={!podeEditar} {...form.getInputProps('numero')} />
+            <TextInput label="Número" ref={numero} disabled={!podeEditar} {...form.getInputProps('numero')} />
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 6 }}>
             <TextInput label="Complemento" disabled={!podeEditar} {...form.getInputProps('complemento')} />
