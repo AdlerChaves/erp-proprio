@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import { IsEmail, IsEnum, IsIn, IsInt, IsNumber, IsOptional, Length, Matches, Max, Min, Validate, ValidateNested } from 'class-validator';
 import { EnderecoDto, MunicipioIbge } from '../../../common/endereco.dto';
 import { AmbienteNfse, RegimeTributario } from '../empresa.entity';
+import { ConfigPropostaDto } from './config-proposta.dto';
 import { CreateEmpresaDto } from './create-empresa.dto';
 
 /** O CNPJ não muda. Os dados fiscais alimentam a nota de serviço; envie null para limpar. */
@@ -42,6 +43,19 @@ export class UpdateEmpresaDto extends PartialType(OmitType(CreateEmpresaDto, ['c
   @IsOptional()
   @IsIn([AmbienteNfse.PRODUCAO, AmbienteNfse.HOMOLOGACAO])
   nfseAmbiente?: AmbienteNfse;
+
+  /** A partir de qual número os orçamentos e vendas são numerados (ex.: 2739). Números já usados não mudam. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(999_999_999)
+  numeroInicialVendas?: number;
+
+  /** Destaques, validade, prazos e parcelamento no cartão dos orçamentos em PDF. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfigPropostaDto)
+  proposta?: ConfigPropostaDto;
 
   /** Contato que aparece em orçamentos e pedidos. Envie null para limpar. */
   @IsOptional()

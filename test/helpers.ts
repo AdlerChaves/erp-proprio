@@ -33,6 +33,7 @@ export function api(app: INestApplication, token?: string) {
     get: (rota: string) => autenticar(http.get(`/api${rota}`)),
     post: (rota: string, corpo: object = {}) => autenticar(http.post(`/api${rota}`)).send(corpo),
     patch: (rota: string, corpo: object = {}) => autenticar(http.patch(`/api${rota}`)).send(corpo),
+    put: (rota: string, corpo: object = {}) => autenticar(http.put(`/api${rota}`)).send(corpo),
     delete: (rota: string) => autenticar(http.delete(`/api${rota}`)),
   };
 }

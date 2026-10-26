@@ -12,6 +12,7 @@ import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { digitos, documento, documentoValido } from '../util/formato';
+import { FormProposta } from './EmpresaProposta';
 import { PERFIS } from './Usuarios';
 
 function FormDados({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
@@ -178,6 +179,50 @@ function FormContato({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEdita
           </Group>
         )}
       </Stack>
+    </form>
+  );
+}
+
+/** A partir de qual número orçamentos e vendas são numerados. */
+function FormNumeracao({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
+  const queryClient = useQueryClient();
+  const form = useForm({
+    initialValues: { numeroInicialVendas: empresa.numeroInicialVendas as number | '' },
+    validate: {
+      numeroInicialVendas: (v) => (v !== '' && Number.isInteger(v) && v >= 1 && v <= 999_999_999 ? null : 'Um número inteiro a partir de 1'),
+    },
+  });
+  const salvar = useMutation({
+    mutationFn: (v: typeof form.values) => api.patch<DadosEmpresa>('/empresas/atual', { numeroInicialVendas: Number(v.numeroInicialVendas) }),
+    onSuccess: (atualizada) => {
+      queryClient.setQueryData(['/empresas/atual'], atualizada);
+      form.resetDirty({ numeroInicialVendas: atualizada.numeroInicialVendas });
+      avisarSucesso('Numeração salva: vale para os próximos orçamentos');
+    },
+    onError: avisarErro,
+  });
+
+  return (
+    <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
+      <Group align="flex-end">
+        <NumberInput
+          label="Primeiro número de orçamentos e vendas"
+          description="Os próximos orçamentos seguem a partir dele; se já houver um número maior em uso, continuam a partir desse"
+          allowDecimal={false}
+          allowNegative={false}
+          thousandSeparator="."
+          decimalSeparator=","
+          min={1}
+          w={{ base: '100%', sm: 420 }}
+          disabled={!podeEditar}
+          {...form.getInputProps('numeroInicialVendas')}
+        />
+        {podeEditar && (
+          <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
+            Salvar
+          </Button>
+        )}
+      </Group>
     </form>
   );
 }
@@ -419,6 +464,22 @@ export function Empresa() {
             Aparecem no cabeçalho dos orçamentos e pedidos em PDF
           </Text>
           {empresa.data && <FormContato key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Orçamento em PDF</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            Logo, destaques, validade, condições e a tabela de parcelamento no cartão que aparecem nos orçamentos
+          </Text>
+          {empresa.data && <FormProposta key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Numeração</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            O mesmo número acompanha o orçamento quando ele vira pedido e venda. Números já usados não mudam.
+          </Text>
+          {empresa.data && <FormNumeracao key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
         </Card>
 
         <Card withBorder padding="lg">

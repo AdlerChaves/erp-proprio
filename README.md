@@ -47,7 +47,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa, filtrável por centro de custo.
 - Centros de custo: ao clicar em um (serviço, projeto, loja), um modal mostra o resultado dele no período: receitas, despesas, lucro, margem, valores em aberto, as categorias e os lançamentos.
 - Cadastros: clientes, fornecedores, produtos e serviços, contas bancárias, plano de contas (em árvore, com o código da subconta sugerido) e centros de custo. O cliente pode ser cadastrado sem CPF/CNPJ para receber uma proposta; o fornecedor, não.
-- Administração: dados da empresa (inclusive contato e endereço, que vão nos PDFs) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
+- Administração: dados da empresa (inclusive contato, endereço, logo e configuração do orçamento em PDF, e o número a partir do qual orçamentos e vendas são numerados) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
 - Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
 - Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
 - `npm run typecheck`, `npm test` (Vitest) e `npm run build` dentro de `web/`.
@@ -139,6 +139,8 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | POST | `/api/cartoes/:id/faturas/:competencia/fechamento` · `/reabertura` | Fecha a fatura conferida com o banco, ou reabre se não houver pagamento |
 | POST/PATCH/DELETE | `/api/cartoes/:id/lancamentos` · `/:lancamentoId` | Compra (parcelada ou não) ou estorno; a alteração muda descrição e classificação; a exclusão remove a compra inteira |
 | GET | `/api/vendas/:id/pdf` · `/api/compras/:id/pdf` | Orçamento, pedido de venda, venda ou pedido de compra em PDF, conforme a situação |
+| GET/PUT/DELETE | `/api/empresas/atual/logo` | Logo da empresa para os PDFs (data URL PNG ou JPEG, até 400 KB; alteração só `ADMIN`) |
+| GET/PUT/DELETE | `/api/produtos/:id/imagem` | Foto opcional do produto, que vai junto do item no orçamento (mesmas regras do logo) |
 | GET | `/api/conciliacao?contaBancariaId=&de=&ate=&status=` | Painel: linhas do extrato com sugestões, movimentações sem par, resumo e saldo do banco × sistema |
 | POST | `/api/conciliacao/importacoes` | Importa um OFX (em base64); repetidas são ignoradas e o que bate é conciliado sozinho |
 | POST | `/api/conciliacao/automatica/:contaBancariaId` | Roda de novo a conciliação automática nas linhas pendentes |
@@ -184,7 +186,7 @@ Vendas, compras e estoque:
 - O estoque pode ficar negativo: faturar sem saldo é permitido, e a resposta traz `avisos`. Serviços entram em vendas, mas não controlam estoque nem entram em compras.
 - Compra: `PEDIDO` → `RECEBIDA` (entrada no estoque e contas a pagar com `compraId`). O custo do produto passa a ser o custo médio ponderado, recalculado a cada entrada.
 - Cancelar uma venda faturada ou uma compra recebida faz movimentações inversas, com o mesmo custo, e cancela as contas geradas, desde que nenhuma tenha baixa. Vendas faturadas só são canceladas por `ADMIN` ou `FINANCEIRO`; compras não aparecem para `VENDAS`.
-- Vendas e compras são numeradas em sequência por empresa. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
+- Vendas e compras são numeradas em sequência por empresa. Orçamentos e vendas podem começar de um número maior (`numeroInicialVendas` da empresa, ex.: 2739): o próximo é o maior entre ele e o último usado mais um, então a numeração nunca volta nem repete. Faturamento, recebimento e cancelamento travam o documento e os produtos, então operações simultâneas não duplicam contas nem perdem baixas de estoque.
 - Um produto que já movimentou estoque não pode virar serviço.
 
 Cartões de crédito:
@@ -205,7 +207,12 @@ Conciliação bancária:
 Orçamentos e pedidos em PDF:
 
 - O título acompanha a situação: orçamento, pedido de venda (com linha de "De acordo" do cliente), venda faturada ou pedido de compra; cancelado leva marca-d'água. As condições de pagamento vêm das contas lançadas ou, antes disso, da previsão de parcelas.
-- O cabeçalho usa nome fantasia, razão social, CNPJ, inscrição municipal, endereço, telefone e e-mail da empresa. O PDF é gerado no servidor (pdfmake, fonte Helvetica embutida, sem acesso a arquivos ou URLs).
+- O cabeçalho usa o logo (ou o nome fantasia), razão social, CNPJ, inscrição municipal, endereço, telefone e e-mail da empresa, com uma faixa de até 4 destaques. Ao lado do cliente vão número, data, validade e quem gerou o documento; os itens mostram código, unitário, desconto, unitário final e total, com a foto do produto quando houver.
+- Com produtos e serviços no mesmo documento, cada tipo ganha sua tabela e seu subtotal, e o resumo mostra os dois subtotais (já com desconto) e o total.
+- Cada orçamento escolhe se mostra a tabela de parcelamento no cartão (`exibirParcelamento`) e, havendo serviço, se ele é só mão de obra ou material com mão de obra inclusa (`escopoServico`), informado nas condições gerais.
+- No orçamento, uma tabela de formas de pagamento traz o valor à vista (Pix ou boleto) e o parcelamento no cartão pela tabela Price: juros compostos ao mês (padrão 2%), até um máximo de parcelas (padrão 12), com as primeiras sem acréscimo (padrão 1x). A parcela é arredondada ao centavo e o total é a parcela vezes o número de parcelas. Validade (padrão 10 dias), previsão de entrega, garantia e condições comerciais vêm da configuração da empresa (`proposta`); empresa sem configuração usa o padrão.
+- O logo é PNG ou JPEG de até 400 KB, conferido pela assinatura do arquivo; fica fora das consultas comuns da empresa, e a auditoria registra a troca sem guardar a imagem (textos com mais de 2.000 caracteres são omitidos). Se o logo ou uma foto não puder ser lido, o PDF sai sem imagens.
+- Títulos de seção não ficam sozinhos no fim da página, e os quadros curtos não se dividem entre páginas. O PDF é gerado no servidor (pdfmake, fonte Helvetica embutida, sem acesso a arquivos ou URLs).
 
 Consulta de CEP:
 
@@ -256,7 +263,7 @@ npm run test:e2e
 | `test/financeiro.e2e-spec.ts` | Baixas parciais (inclusive simultâneas), juros/multa/desconto, parcelamento, fluxo de caixa, DRE e resumo por centro de custo |
 | `test/cartoes.e2e-spec.ts` | Calendário das faturas, lançamentos, parcelas, estornos, conta a pagar sincronizada, datas ajustadas e redistribuição, fechamento, pagamento, DRE, limite e permissões |
 | `test/conciliacao.e2e-spec.ts` | Leitura de OFX (SGML/XML, codificações, sinais), importação sem duplicar, conciliação automática e disputas, ações por linha, baixa com juros/desconto, saldo, perfis e isolamento |
-| `test/documentos.e2e-spec.ts` | Textos do PDF (moeda, documentos, endereço, parcelas), PDF válido com várias páginas, título e nome por situação, contato da empresa, perfis e isolamento |
+| `test/documentos.e2e-spec.ts` | Textos do PDF (moeda, documentos, endereço, parcelas), parcelamento no cartão pela tabela Price, produtos e serviços separados, escopo do serviço e parcelamento por orçamento, foto do produto, configuração da proposta, logo (formato, tamanho, imagem corrompida, auditoria), PDF válido com várias páginas, título e nome por situação, contato da empresa, perfis e isolamento |
 | `test/consulta-cep.e2e-spec.ts` | Conversão das duas fontes, município pelo código ou pelo nome, CEP geral, reserva, não encontrado, fontes fora do ar, validação e cache, com as fontes simuladas |
 | `test/consulta-cnpj.e2e-spec.ts` | Conversão dos dados da Receita, cache, troca de fonte, CNPJ inexistente, fontes fora do ar e validação, com as fontes simuladas |
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |

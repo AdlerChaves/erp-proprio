@@ -70,6 +70,10 @@ export class Produto {
   @Column({ name: 'codigo_nbs', type: 'varchar', length: 9, nullable: true })
   codigoNbs: string | null;
 
+  /** Foto em data URL (PNG ou JPEG), opcional. Fora das consultas comuns: é carregada só para o PDF e o cadastro. */
+  @Column({ type: 'text', nullable: true, select: false })
+  imagem?: string | null;
+
   @Column({ default: true })
   ativo: boolean;
 

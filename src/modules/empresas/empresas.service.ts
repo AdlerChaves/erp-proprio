@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { validarImagem } from '../../common/imagem';
 import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
@@ -25,8 +26,29 @@ export class EmpresasService {
     if (dto.nfseSerie && Number(dto.nfseSerie) > 49999) {
       throw new BadRequestException('A série da DPS para aplicativo próprio vai de 1 a 49999');
     }
+    if (dto.proposta && dto.proposta.parcelasSemJuros > dto.proposta.parcelasCartao) {
+      throw new BadRequestException('As parcelas sem juros não podem passar do máximo de parcelas no cartão');
+    }
     const empresa = await this.findOne(id);
     return this.repo.save(this.repo.merge(empresa, dto));
+  }
+
+  async logo(id: string) {
+    const empresa = await this.repo.findOne({ where: { id }, select: { id: true, logo: true } });
+    if (!empresa) throw new NotFoundException(`Empresa ${id} não encontrada`);
+    return { logo: empresa.logo ?? null };
+  }
+
+  async definirLogo(id: string, imagem: string) {
+    validarImagem(imagem, 'o logo');
+    await this.findOne(id);
+    await this.repo.update(id, { logo: imagem });
+    return { logo: imagem };
+  }
+
+  async removerLogo(id: string) {
+    await this.findOne(id);
+    await this.repo.update(id, { logo: null });
   }
 
   /** Cria a empresa com o plano de contas padrão e torna o usuário seu administrador. */

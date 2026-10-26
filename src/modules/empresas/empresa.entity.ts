@@ -16,6 +16,36 @@ export enum RegimeTributario {
   LUCRO_REAL = 'LUCRO_REAL',
 }
 
+/** Como a empresa apresenta orçamentos e pedidos em PDF. */
+export interface ConfigProposta {
+  /** Até 4 frases curtas numa faixa abaixo do cabeçalho ("Garantia de 12 meses"). */
+  destaques: string[];
+  /** Validade do orçamento em dias a partir da emissão; null não mostra validade. */
+  validadeDias: number | null;
+  prazoEntrega: string | null;
+  garantia: string | null;
+  /** Condições comerciais em texto livre. */
+  condicoes: string | null;
+  /** Mostra no orçamento a tabela de parcelamento no cartão. */
+  simularCartao: boolean;
+  /** Juros compostos ao mês (tabela Price), em %, nas parcelas acima de parcelasSemJuros. */
+  jurosCartao: number;
+  parcelasCartao: number;
+  parcelasSemJuros: number;
+}
+
+export const PROPOSTA_PADRAO: ConfigProposta = {
+  destaques: [],
+  validadeDias: 10,
+  prazoEntrega: null,
+  garantia: null,
+  condicoes: null,
+  simularCartao: true,
+  jurosCartao: 2,
+  parcelasCartao: 12,
+  parcelasSemJuros: 1,
+};
+
 /** Ambiente da NFS-e nacional (tpAmb). */
 export enum AmbienteNfse {
   PRODUCAO = 1,
@@ -81,6 +111,25 @@ export class Empresa {
 
   @Column({ name: 'nfse_ambiente', type: 'smallint', default: AmbienteNfse.HOMOLOGACAO })
   nfseAmbiente: AmbienteNfse;
+
+  /**
+   * Número mínimo de orçamentos e vendas (a numeração é a mesma: o orçamento aprovado vira pedido e venda).
+   * O próximo é o maior entre este e o último usado mais um, então nunca se repete.
+   */
+  @Column({ name: 'numero_inicial_vendas', type: 'integer', default: 1 })
+  numeroInicialVendas: number;
+
+  /** Nulo (empresa que nunca configurou) ou incompleto (campo novo) é completado com o padrão na leitura. */
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    transformer: { from: (v: Partial<ConfigProposta> | null) => ({ ...PROPOSTA_PADRAO, ...v }), to: (v?: ConfigProposta) => v },
+  })
+  proposta: ConfigProposta;
+
+  /** Logo em data URL (PNG ou JPEG). Fora das consultas comuns: é carregado só para o PDF e a tela da empresa. */
+  @Column({ type: 'text', nullable: true, select: false })
+  logo?: string | null;
 
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;

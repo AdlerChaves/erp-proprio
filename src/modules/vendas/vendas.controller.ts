@@ -31,7 +31,7 @@ export class VendasController {
   /** Orçamento, pedido ou venda em PDF, para enviar ao cliente. */
   @Get(':id/pdf')
   async pdf(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
-    const { nome, conteudo } = await this.service.pdf(sessao.empresaId, id);
+    const { nome, conteudo } = await this.service.pdf(sessao.empresaId, id, sessao.usuarioId);
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${nome}"` });
     return new StreamableFile(conteudo);
   }

@@ -78,6 +78,7 @@ export const api = {
   get: <T>(rota: string) => requisitar<T>('GET', rota),
   post: <T>(rota: string, corpo: unknown = {}) => requisitar<T>('POST', rota, corpo),
   patch: <T>(rota: string, corpo: unknown) => requisitar<T>('PATCH', rota, corpo),
+  put: <T>(rota: string, corpo: unknown) => requisitar<T>('PUT', rota, corpo),
   delete: <T>(rota: string) => requisitar<T>('DELETE', rota),
 };
 

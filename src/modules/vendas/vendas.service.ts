@@ -12,8 +12,8 @@ import { EstoqueService } from '../estoque/estoque.service';
 import { OrigemMovimentacaoEstoque, TipoMovimentacaoEstoque } from '../estoque/movimentacao-estoque.entity';
 import { TipoPlanoConta } from '../plano-contas/plano-conta.entity';
 import { dadosVenda, geradoEm } from '../documentos/dados-documento';
-import { gerarPdf, montarDocumento } from '../documentos/documento-pdf';
-import { Empresa } from '../empresas/empresa.entity';
+import { contextoDocumento, imagensProdutos } from '../documentos/contexto-documento';
+import { gerarDocumento } from '../documentos/documento-pdf';
 import { NotaServico, StatusNotaServico } from '../nfse/nota-servico.entity';
 import { PlanoContasService } from '../plano-contas/plano-contas.service';
 import { Produto, TipoProduto } from '../produtos/produto.entity';
@@ -60,12 +60,16 @@ export class VendasService {
   }
 
   /** Orçamento, pedido ou venda em PDF, conforme a situação. */
-  async pdf(empresaId: string, id: string) {
+  async pdf(empresaId: string, id: string, usuarioId: string) {
     const venda = await this.findOne(empresaId, id);
-    const empresa = await this.dataSource.getRepository(Empresa).findOneByOrFail({ id: empresaId });
-    const dados = dadosVenda(venda, empresa, geradoEm());
+    const [{ empresa, responsavel }, imagens] = await Promise.all([
+      contextoDocumento(this.dataSource, empresaId, usuarioId),
+      imagensProdutos(this.dataSource, empresaId, venda.itens.map((i) => i.produtoId)),
+    ]);
+    const itens = venda.itens.map((i) => ({ ...i, produto: { ...i.produto, imagem: imagens.get(i.produtoId) ?? null } }));
+    const dados = dadosVenda({ ...venda, itens }, empresa, geradoEm(), responsavel);
     const nome = `${dados.tipo === 'ORCAMENTO' ? 'Orcamento' : dados.tipo === 'VENDA' ? 'Venda' : 'Pedido'}-${venda.numero}.pdf`;
-    return { nome, conteudo: await gerarPdf(montarDocumento(dados)) };
+    return { nome, conteudo: await gerarDocumento(dados) };
   }
 
   async create(empresaId: string, dto: CreateVendaDto) {

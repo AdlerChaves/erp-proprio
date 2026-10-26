@@ -143,6 +143,20 @@ export interface FluxoCaixa {
 
 export type RegimeTributario = 'SIMPLES_NACIONAL' | 'MEI' | 'LUCRO_PRESUMIDO' | 'LUCRO_REAL';
 
+/** Como os orçamentos e pedidos em PDF são apresentados. */
+export interface ConfigProposta {
+  destaques: string[];
+  validadeDias: number | null;
+  prazoEntrega: string | null;
+  garantia: string | null;
+  condicoes: string | null;
+  simularCartao: boolean;
+  /** Juros compostos ao mês, em %. */
+  jurosCartao: number;
+  parcelasCartao: number;
+  parcelasSemJuros: number;
+}
+
 export interface Empresa {
   id: string;
   razaoSocial: string;
@@ -157,6 +171,9 @@ export interface Empresa {
   nfseSerie: string;
   /** 1 = produção, 2 = homologação. */
   nfseAmbiente: 1 | 2;
+  /** Orçamentos e vendas são numerados a partir deste número (ou do último usado, se for maior). */
+  numeroInicialVendas: number;
+  proposta: ConfigProposta;
   telefone: string | null;
   email: string | null;
   endereco: Endereco | null;
@@ -308,11 +325,17 @@ export interface ItemVenda {
   total: number;
 }
 
+/** O que o serviço do orçamento cobre; aparece nas condições gerais do PDF. */
+export type EscopoServico = 'MAO_DE_OBRA' | 'MATERIAL_INCLUSO';
+
 export interface Venda extends DocumentoComercial {
   clienteId: string;
   cliente: Pessoa;
   status: StatusVenda;
   dataFaturamento: string | null;
+  escopoServico: EscopoServico | null;
+  /** Mostra no orçamento em PDF a tabela de parcelamento no cartão. */
+  exibirParcelamento: boolean;
   itens?: ItemVenda[];
 }
 

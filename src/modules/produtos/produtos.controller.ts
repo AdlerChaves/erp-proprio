@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ImagemDto } from '../../common/imagem';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
 import { Perfil } from '../usuarios/perfil.enum';
@@ -38,6 +39,25 @@ export class ProdutosController {
     @Body() dto: UpdateProdutoDto,
   ) {
     return this.service.update(sessao.empresaId, id, dto);
+  }
+
+  /** Foto opcional, que vai junto do item no orçamento em PDF. */
+  @Get(':id/imagem')
+  imagem(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.imagem(sessao.empresaId, id);
+  }
+
+  @Put(':id/imagem')
+  @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO, Perfil.VENDAS)
+  definirImagem(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ImagemDto) {
+    return this.service.definirImagem(sessao.empresaId, id, dto.imagem);
+  }
+
+  @Delete(':id/imagem')
+  @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO, Perfil.VENDAS)
+  @HttpCode(204)
+  removerImagem(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.removerImagem(sessao.empresaId, id);
   }
 
   @Delete(':id')

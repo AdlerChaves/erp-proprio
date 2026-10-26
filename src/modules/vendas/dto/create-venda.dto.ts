@@ -3,7 +3,9 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
+  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -15,7 +17,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { StatusVenda } from '../venda.entity';
+import { EscopoServico, StatusVenda } from '../venda.entity';
 
 export class ItemVendaDto {
   @IsUUID()
@@ -83,4 +85,14 @@ export class CreateVendaDto {
   @IsOptional()
   @Length(0, 500)
   observacoes?: string | null;
+
+  /** Só mão de obra ou material com mão de obra inclusa. Envie null na alteração para não informar. */
+  @IsOptional()
+  @IsEnum(EscopoServico)
+  escopoServico?: EscopoServico | null;
+
+  /** Padrão: true. */
+  @IsOptional()
+  @IsBoolean()
+  exibirParcelamento?: boolean;
 }

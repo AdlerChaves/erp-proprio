@@ -27,6 +27,12 @@ export enum StatusVenda {
   CANCELADA = 'CANCELADA',
 }
 
+/** O que o serviço do orçamento cobre; aparece nas condições gerais do PDF. */
+export enum EscopoServico {
+  MAO_DE_OBRA = 'MAO_DE_OBRA',
+  MATERIAL_INCLUSO = 'MATERIAL_INCLUSO',
+}
+
 @Entity('vendas')
 @Check('CHK_vendas_parcelas', '"parcelas" BETWEEN 1 AND 120')
 @Check('CHK_vendas_total', '"total" >= 0')
@@ -89,6 +95,14 @@ export class Venda {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   observacoes: string | null;
+
+  /** Sem escopo, o PDF não diz se o material está incluso. */
+  @Column({ name: 'escopo_servico', type: 'enum', enum: EscopoServico, nullable: true })
+  escopoServico: EscopoServico | null;
+
+  /** Mostra no orçamento em PDF a tabela de parcelamento no cartão (se a empresa a usa). */
+  @Column({ name: 'exibir_parcelamento', default: true })
+  exibirParcelamento: boolean;
 
   /** Soma dos itens. */
   @Column({ type: 'numeric', precision: 14, scale: 2, transformer: decimalTransformer })

@@ -1,13 +1,14 @@
-import { Button, Card, Group, Loader, Modal, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { Button, Card, FileButton, Group, Image, Loader, Modal, Paper, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconPlus, IconSearch } from '@tabler/icons-react';
+import { IconPhoto, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { api } from '../api/cliente';
 import type { Produto, TipoProduto } from '../api/tipos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes, SituacaoAtivo } from '../componentes/comum';
 import { CampoServicoNacional } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
+import { lerComoDataUrl, TAMANHO_MAXIMO_IMAGEM } from '../util/arquivo';
 import { digitos, moeda } from '../util/formato';
 
 const TIPOS: { value: TipoProduto; label: string }[] = [
@@ -15,8 +16,64 @@ const TIPOS: { value: TipoProduto; label: string }[] = [
   { value: 'SERVICO', label: 'Serviço' },
 ];
 
+/**
+ * Foto opcional do item, que vai no orçamento em PDF. Fica só no formulário até salvar:
+ * `undefined` mantém a atual, `null` remove.
+ */
+function CampoImagem({ atual, valor, aoMudar }: { atual: string | null; valor: string | null | undefined; aoMudar: (imagem: string | null) => void }) {
+  const limpar = useRef<() => void>(null);
+  const exibida = valor === undefined ? atual : valor;
+  const escolher = async (arquivo: File | null) => {
+    limpar.current?.();
+    if (!arquivo) return;
+    if (!['image/png', 'image/jpeg'].includes(arquivo.type)) return avisarErro(new Error('Use uma imagem PNG ou JPG'));
+    if (arquivo.size > TAMANHO_MAXIMO_IMAGEM) return avisarErro(new Error('A imagem deve ter até 400 KB; reduza e tente de novo'));
+    try {
+      aoMudar(await lerComoDataUrl(arquivo));
+    } catch (erro) {
+      avisarErro(erro);
+    }
+  };
+  return (
+    <Group align="center" gap="md">
+      <Paper withBorder w={80} h={80} p={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {exibida ? (
+          <Image src={exibida} alt="Imagem do item" fit="contain" h="100%" w="100%" />
+        ) : (
+          <IconPhoto size={28} color="var(--mantine-color-gray-5)" aria-hidden />
+        )}
+      </Paper>
+      <Stack gap={6}>
+        <Group gap="xs">
+          <FileButton resetRef={limpar} onChange={escolher} accept="image/png,image/jpeg">
+            {(props) => (
+              <Button {...props} size="xs" variant="light" leftSection={<IconPhoto size={16} />}>
+                {exibida ? 'Trocar imagem' : 'Adicionar imagem'}
+              </Button>
+            )}
+          </FileButton>
+          {exibida && (
+            <Button size="xs" variant="subtle" color="red" leftSection={<IconTrash size={16} />} onClick={() => aoMudar(null)}>
+              Remover
+            </Button>
+          )}
+        </Group>
+        <Text size="xs" c="dimmed">
+          Opcional. PNG ou JPG, até 400 KB; aparece junto do item no orçamento em PDF.
+        </Text>
+      </Stack>
+    </Group>
+  );
+}
+
 function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar: () => void }) {
   const queryClient = useQueryClient();
+  const imagemAtual = useQuery({
+    queryKey: ['/produtos', produto?.id, 'imagem'],
+    queryFn: () => api.get<{ imagem: string | null }>(`/produtos/${produto!.id}/imagem`),
+    enabled: !!produto,
+  });
+  const [imagem, setImagem] = useState<string | null | undefined>(undefined);
   const form = useForm({
     initialValues: {
       tipo: (produto?.tipo ?? 'PRODUTO') as TipoProduto,
@@ -48,7 +105,7 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
   const servico = form.values.tipo === 'SERVICO';
 
   const salvar = useMutation({
-    mutationFn: (v: typeof form.values) => {
+    mutationFn: async (v: typeof form.values) => {
       const corpo = {
         tipo: v.tipo,
         codigo: v.codigo.trim(),
@@ -63,7 +120,14 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
         codigoNbs: servico && v.codigoNbs ? digitos(v.codigoNbs) : null,
         ativo: v.ativo,
       };
-      return produto ? api.patch(`/produtos/${produto.id}`, corpo) : api.post('/produtos', corpo);
+      const salvo = await (produto ? api.patch<Produto>(`/produtos/${produto.id}`, corpo) : api.post<Produto>('/produtos', corpo));
+      if (imagem === undefined) return;
+      // O item já foi salvo: se só a imagem falhar, avisa sem prender o formulário (salvar de novo duplicaria o cadastro).
+      try {
+        await (imagem ? api.put(`/produtos/${salvo.id}/imagem`, { imagem }) : api.delete(`/produtos/${salvo.id}/imagem`));
+      } catch (erro) {
+        avisarErro(new Error(`Item salvo, mas a imagem não: ${(erro as Error).message}`));
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/produtos'] });
@@ -108,6 +172,11 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
           <CampoMoeda label="Preço de venda" {...form.getInputProps('precoVenda')} />
           <CampoMoeda label="Custo" description="Opcional" {...form.getInputProps('custo')} />
         </SimpleGrid>
+        {produto && imagemAtual.isPending ? (
+          <Loader size="sm" />
+        ) : (
+          <CampoImagem atual={imagemAtual.data?.imagem ?? null} valor={imagem} aoMudar={setImagem} />
+        )}
         <Switch label="Ativo" {...form.getInputProps('ativo', { type: 'checkbox' })} />
         <Group justify="flex-end">
           <Button variant="default" onClick={aoFechar}>

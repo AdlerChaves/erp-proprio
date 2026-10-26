@@ -12,7 +12,11 @@ const CAMPO_SENSIVEL = /senha|password|token|secret/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Copia o objeto trocando o valor de campos sensíveis, em qualquer nível, por "***". */
+/** Textos maiores que isto (logo, extrato OFX em base64) não vão inteiros para a auditoria. */
+const MAXIMO_TEXTO = 2_000;
+
 export function ocultarSensiveis(valor: unknown): unknown {
+  if (typeof valor === 'string' && valor.length > MAXIMO_TEXTO) return `[${valor.length} caracteres omitidos]`;
   if (Array.isArray(valor)) return valor.map(ocultarSensiveis);
   if (valor && typeof valor === 'object') {
     return Object.fromEntries(

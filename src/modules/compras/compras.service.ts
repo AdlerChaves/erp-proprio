@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, EntityManager, FindOptionsWhere, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { hoje } from '../../common/datas';
 import { dadosCompra, geradoEm } from '../documentos/dados-documento';
-import { gerarPdf, montarDocumento } from '../documentos/documento-pdf';
-import { Empresa } from '../empresas/empresa.entity';
+import { contextoDocumento } from '../documentos/contexto-documento';
+import { gerarDocumento } from '../documentos/documento-pdf';
 import { centavos, reais } from '../../common/dinheiro';
 import { proximoNumero } from '../../common/numeracao';
 import { milesimos, totalItem } from '../../common/quantidade';
@@ -56,10 +56,10 @@ export class ComprasService {
   }
 
   /** Pedido de compra em PDF, para enviar ao fornecedor. */
-  async pdf(empresaId: string, id: string) {
+  async pdf(empresaId: string, id: string, usuarioId: string) {
     const compra = await this.findOne(empresaId, id);
-    const empresa = await this.dataSource.getRepository(Empresa).findOneByOrFail({ id: empresaId });
-    return { nome: `Pedido-de-compra-${compra.numero}.pdf`, conteudo: await gerarPdf(montarDocumento(dadosCompra(compra, empresa, geradoEm()))) };
+    const { empresa, responsavel } = await contextoDocumento(this.dataSource, empresaId, usuarioId);
+    return { nome: `Pedido-de-compra-${compra.numero}.pdf`, conteudo: await gerarDocumento(dadosCompra(compra, empresa, geradoEm(), responsavel)) };
   }
 
   async create(empresaId: string, dto: CreateCompraDto) {

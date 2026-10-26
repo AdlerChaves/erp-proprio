@@ -231,6 +231,26 @@ describe('Vendas, compras e estoque', () => {
       expect(body.numero).toBe(1);
     });
 
+    it('começa do número inicial da empresa, sem repetir nem voltar números já usados', async () => {
+      const p = await produto();
+      expect((await vender([{ produtoId: p.id, quantidade: 1 }]).expect(201)).body.numero).toBe(1);
+
+      const { body: empresa } = await api(app, a.token).patch('/empresas/atual', { numeroInicialVendas: 2739 }).expect(200);
+      expect(empresa.numeroInicialVendas).toBe(2739);
+      const simultaneas = await Promise.all(Array.from({ length: 3 }, () => vender([{ produtoId: p.id, quantidade: 1 }]).expect(201)));
+      expect(simultaneas.map((r) => r.body.numero).sort((x, y) => x - y)).toEqual([2739, 2740, 2741]);
+
+      // Um número inicial menor que o último usado não faz a numeração voltar.
+      await api(app, a.token).patch('/empresas/atual', { numeroInicialVendas: 100 }).expect(200);
+      expect((await vender([{ produtoId: p.id, quantidade: 1 }]).expect(201)).body.numero).toBe(2742);
+      // Compras continuam com a numeração delas.
+      expect((await comprar([{ produtoId: p.id, quantidade: 1, custoUnitario: 1 }]).expect(201)).body.numero).toBe(1);
+
+      for (const invalido of [0, -5, 1.5, 'abc']) await api(app, a.token).patch('/empresas/atual', { numeroInicialVendas: invalido }).expect(400);
+      const vendas = await adicionarUsuario(app, a, Perfil.VENDAS);
+      await api(app, vendas.token).patch('/empresas/atual', { numeroInicialVendas: 5000 }).expect(403);
+    });
+
     it('dois faturamentos simultâneos da mesma venda: só um passa', async () => {
       const p = await produto();
       await ajustar(p.id, 'ENTRADA', 10).expect(201);

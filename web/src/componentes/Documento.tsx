@@ -1,11 +1,11 @@
-import { ActionIcon, Badge, Button, Grid, Group, NumberInput, type NumberInputProps, Paper, Select, SimpleGrid, Stack, Table, Text, Textarea } from '@mantine/core';
+import { ActionIcon, Badge, Button, Checkbox, Grid, Group, NumberInput, type NumberInputProps, Paper, Select, SimpleGrid, Stack, Table, Text, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMediaQuery } from '@mantine/hooks';
 import { IconFileTypePdf, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, baixarArquivo } from '../api/cliente';
-import type { CentroCusto, Compra, ContaFinanceira, Pessoa, PlanoConta, Produto, TipoPlanoConta, Venda } from '../api/tipos';
+import type { CentroCusto, Compra, ContaFinanceira, Empresa, EscopoServico, Pessoa, PlanoConta, Produto, TipoPlanoConta, Venda } from '../api/tipos';
 import { data, moeda, qtd, STATUS_CONTA, totalItemCentavos } from '../util/formato';
 import { avisarErro, avisarSucesso, CampoData, CampoMoeda } from './comum';
 
@@ -78,6 +78,8 @@ export function FormDocumento({
   const produtos = useQuery({ queryKey: ['/produtos'], queryFn: () => api.get<Produto[]>('/produtos') });
   const plano = useQuery({ queryKey: ['/plano-contas'], queryFn: () => api.get<PlanoConta[]>('/plano-contas') });
   const centros = useQuery({ queryKey: ['/centros-custo'], queryFn: () => api.get<CentroCusto[]>('/centros-custo') });
+  const venda = config.nome === 'venda' ? (documento as Venda | null) : null;
+  const empresa = useQuery({ queryKey: ['/empresas/atual'], queryFn: () => api.get<Empresa>('/empresas/atual'), enabled: config.nome === 'venda' });
 
   const itensIniciais = (documento?.itens ?? []).map((i) => ({
     chave: String(++proximaChave),
@@ -96,6 +98,8 @@ export function FormDocumento({
       planoContaId: documento?.planoContaId ?? null,
       centroCustoId: documento?.centroCustoId ?? null,
       observacoes: documento?.observacoes ?? '',
+      escopoServico: venda?.escopoServico ?? (null as EscopoServico | null),
+      exibirParcelamento: venda?.exibirParcelamento ?? true,
     },
     validate: {
       pessoaId: (v) => (v ? null : `Escolha o ${config.pessoa.rotulo.toLowerCase()}`),
@@ -116,6 +120,7 @@ export function FormDocumento({
   const opcoesProdutos = catalogo.map((p) => ({ value: p.id, label: `${p.codigo} · ${p.descricao}` }));
   const produtoDe = (id: string | null) => catalogo.find((p) => p.id === id);
   const total = form.values.itens.reduce((s, l) => s + totalDaLinha(l), 0) / 100;
+  const temServico = form.values.itens.some((l) => produtoDe(l.produtoId)?.tipo === 'SERVICO');
 
   const salvar = useMutation({
     mutationFn: ({ valores, status }: { valores: typeof form.values; status?: 'ORCAMENTO' | 'PEDIDO' }) => {
@@ -134,6 +139,11 @@ export function FormDocumento({
         planoContaId: valores.planoContaId,
         centroCustoId: valores.centroCustoId,
         observacoes: valores.observacoes.trim() || null,
+        ...(config.nome === 'venda' && {
+          // Sem serviço na venda, não há escopo a informar.
+          escopoServico: temServico ? valores.escopoServico : null,
+          exibirParcelamento: valores.exibirParcelamento,
+        }),
       };
       return documento
         ? api.patch<Documento>(`${config.rota}/${documento.id}`, corpo)
@@ -317,6 +327,37 @@ export function FormDocumento({
         </Text>
       )}
       <Textarea label="Observações" autosize minRows={1} maxRows={4} maxLength={500} {...form.getInputProps('observacoes')} />
+      {config.nome === 'venda' && (empresa.data?.proposta.simularCartao || temServico) && (
+        <Paper withBorder p="sm">
+          <Text size="sm" fw={500} mb="xs">
+            No orçamento em PDF
+          </Text>
+          <Stack gap="xs">
+            {empresa.data?.proposta.simularCartao && (
+              <Checkbox
+                label="Mostrar as opções de parcelamento no cartão"
+                {...form.getInputProps('exibirParcelamento', { type: 'checkbox' })}
+              />
+            )}
+            {/* O escopo marcado aparece nas condições gerais do PDF. */}
+            {temServico &&
+              (
+                [
+                  ['MAO_DE_OBRA', 'Serviço somente de mão de obra (material não incluso)'],
+                  ['MATERIAL_INCLUSO', 'Material com mão de obra inclusa'],
+                ] as const
+              ).map(([escopo, rotulo]) => (
+                <Checkbox
+                  key={escopo}
+                  label={rotulo}
+                  checked={form.values.escopoServico === escopo}
+                  // Um exclui o outro; desmarcar deixa o escopo sem informar.
+                  onChange={(e) => form.setFieldValue('escopoServico', e.currentTarget.checked ? escopo : null)}
+                />
+              ))}
+          </Stack>
+        </Paper>
+      )}
 
       <Group justify="flex-end">
         <Button variant="default" onClick={aoFechar}>

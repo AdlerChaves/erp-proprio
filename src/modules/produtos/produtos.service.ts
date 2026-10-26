@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { validarImagem } from '../../common/imagem';
 import { EstoqueService } from '../estoque/estoque.service';
 import { servicoNacional } from '../nfse/catalogos';
 import { CreateProdutoDto } from './dto/create-produto.dto';
@@ -43,6 +44,24 @@ export class ProdutosService {
     this.repo.merge(produto, dto);
     this.validarCamposFiscais(produto);
     return this.repo.save(produto);
+  }
+
+  async imagem(empresaId: string, id: string) {
+    const produto = await this.repo.findOne({ where: { id, empresaId }, select: { id: true, imagem: true } });
+    if (!produto) throw new NotFoundException(`Produto ${id} não encontrado`);
+    return { imagem: produto.imagem ?? null };
+  }
+
+  async definirImagem(empresaId: string, id: string, imagem: string) {
+    validarImagem(imagem, 'a imagem');
+    await this.findOne(empresaId, id);
+    await this.repo.update(id, { imagem });
+    return { imagem };
+  }
+
+  async removerImagem(empresaId: string, id: string) {
+    await this.findOne(empresaId, id);
+    await this.repo.update(id, { imagem: null });
   }
 
   async remove(empresaId: string, id: string) {
