@@ -1,12 +1,14 @@
-import { Alert, Box, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { Alert, Anchor, Box, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { api, consulta } from '../api/cliente';
 import type { FluxoCaixa, Saldos } from '../api/tipos';
 import { Cabecalho, ErroCarregamento } from '../componentes/comum';
 import { useSessao } from '../sessao/sessao';
+import { Link } from 'react-router-dom';
 import { mesAno, moeda } from '../util/formato';
+import { type DadosProjecao, indicadores, projetar } from '../util/projecao';
 
 const MESES_PROJETADOS = 6;
 
@@ -48,6 +50,15 @@ export function Painel() {
     enabled: permitido,
   });
 
+  // Projeção até o mesmo fim do fluxo de caixa, no cenário prudente (sem contar com os atrasados dos clientes):
+  // dá o aviso de caixa negativo e o saldo projetado, já com as contas vencidas a pagar.
+  const projecao = useQuery({
+    queryKey: ['projecao', ate],
+    queryFn: () => api.get<DadosProjecao>(`/financeiro/projecao${consulta({ ate })}`),
+    enabled: permitido,
+  });
+  const negativo = projecao.data ? indicadores(projetar(projecao.data, { atrasadosReceber: false, contratos: true, recorrentes: true })) : null;
+
   const saudacao = `Olá, ${me?.usuario.nome.split(' ')[0]}`;
   // "Sexta-feira, 30 de outubro"
   const hojePorExtenso = dayjs().format('dddd, D [de] MMMM').replace(/^./, (c) => c.toUpperCase());
@@ -69,6 +80,21 @@ export function Painel() {
     <Stack gap="md">
       <Cabecalho titulo={saudacao} descricao={`${hojePorExtenso} · situação financeira de hoje e projeção dos próximos meses`} />
 
+      {negativo?.negativo && (
+        <Alert color="red" variant="light" icon={<IconAlertTriangle size={20} />}>
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Text size="sm">
+              <b>O caixa fica negativo em {dayjs(negativo.negativo.data).format('DD/MM')}</b>
+              {negativo.negativo.dias > 0 ? `, daqui a ${negativo.negativo.dias} dia${negativo.negativo.dias === 1 ? '' : 's'}` : ', hoje'}, e chega a{' '}
+              {moeda(negativo.menor.valor / 100)} em {dayjs(negativo.menor.data).format('DD/MM')}.
+            </Text>
+            <Anchor component={Link} to="/projecao" size="sm" fw={500}>
+              Ver a projeção e simular
+            </Anchor>
+          </Group>
+        </Alert>
+      )}
+
       <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }}>
         <Indicador rotulo="Saldo em contas" valor={saldos.data.total} detalhe={`${saldos.data.contas.length} conta${saldos.data.contas.length === 1 ? '' : 's'}`} />
         <Indicador
@@ -83,7 +109,11 @@ export function Painel() {
           alerta={fluxo.data.emAtraso.pagar > 0 ? 'red' : undefined}
           detalhe={fluxo.data.emAtraso.pagar > 0 ? 'Vencido e ainda não pago' : 'Nada em atraso'}
         />
-        <Indicador rotulo="Saldo projetado" valor={fluxo.data.saldoFinal} detalhe={`Ao fim de ${mesAno(fluxo.data.ate.slice(0, 7))}`} />
+        <Indicador
+          rotulo="Saldo projetado"
+          valor={negativo ? negativo.final / 100 : fluxo.data.saldoFinal}
+          detalhe={`Ao fim de ${mesAno(fluxo.data.ate.slice(0, 7))}, já com as contas vencidas`}
+        />
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, lg: 3 }}>
@@ -120,7 +150,8 @@ export function Painel() {
             </Table>
           </Table.ScrollContainer>
           <Text size="xs" c="dimmed" mt="xs">
-            O saldo de cada mês soma o que já entrou e saiu com o que ainda vence, partindo de {moeda(fluxo.data.saldoInicial)}
+            Não inclui as contas já vencidas (veja os atrasos acima); a projeção do caixa inclui. O saldo de cada mês soma o que já entrou e saiu com o que ainda
+            vence, partindo de {moeda(fluxo.data.saldoInicial)}
             {aberturas > 0 && `, mais ${moeda(aberturas)} de saldo inicial de contas abertas no período`}.
           </Text>
         </Card>

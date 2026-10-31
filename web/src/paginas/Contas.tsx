@@ -487,6 +487,11 @@ export function Contas({ config }: { config: ConfigContas }) {
                             Cartão
                           </Badge>
                         )}
+                        {c.despesaRecorrenteId && (
+                          <Text size="xs" c="dimmed">
+                            Despesa recorrente
+                          </Text>
+                        )}
                       </Table.Td>
                       <Table.Td>{c[config.pessoa.relacao]?.nome}</Table.Td>
                       <Table.Td>
@@ -504,7 +509,14 @@ export function Contas({ config }: { config: ConfigContas }) {
                           </Text>
                         )}
                       </Table.Td>
-                      <Table.Td ta="right">{moeda(c.valor)}</Table.Td>
+                      <Table.Td ta="right">
+                        {moeda(c.valor)}
+                        {c.estimada && c.status === 'ABERTA' && (
+                          <Text size="xs" c="orange.8" title="Valor previsto pela média ou pelo faturamento; edite a conta com o valor real quando ela chegar">
+                            estimado
+                          </Text>
+                        )}
+                      </Table.Td>
                       <Table.Td ta="right" fw={600}>
                         {moeda(c.saldo)}
                       </Table.Td>

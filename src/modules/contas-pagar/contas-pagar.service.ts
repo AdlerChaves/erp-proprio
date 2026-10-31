@@ -41,10 +41,18 @@ export class ContasPagarService extends ContasFinanceirasService<ContaPagar> {
     return this.fornecedores.findOne(empresaId, id);
   }
 
-  /** A conta de uma fatura de cartão acompanha os lançamentos do cartão: não é editada nem cancelada aqui. */
+  /**
+   * A conta de uma fatura de cartão acompanha os lançamentos do cartão: não é editada nem cancelada aqui.
+   * Corrigir o valor de uma conta lançada com valor estimado (energia, DAS) o torna o valor real.
+   */
   async update(empresaId: string, id: string, dto: UpdateContaDto) {
     await this.recusarSeFatura(empresaId, id);
-    return super.update(empresaId, id, dto);
+    const conta = await super.update(empresaId, id, dto);
+    if (dto.valor !== undefined && conta.estimada) {
+      await this.repo.update(id, { estimada: false });
+      return this.findOne(empresaId, id);
+    }
+    return conta;
   }
 
   async cancelar(empresaId: string, id: string) {

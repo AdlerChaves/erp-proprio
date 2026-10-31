@@ -5,7 +5,9 @@ import {
   IconBuilding,
   IconBuildingBank,
   IconBuildingWarehouse,
+  IconCalendarRepeat,
   IconChartBar,
+  IconChartLine,
   IconCheck,
   IconSelector,
   IconCreditCard,
@@ -58,8 +60,10 @@ const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
   {
     grupo: 'Financeiro',
     itens: [
+      { rota: '/projecao', rotulo: 'Projeção do caixa', icone: IconChartLine, permissao: 'verSaldos' },
       { rota: '/contas-receber', rotulo: 'Contas a receber', icone: IconReceipt },
       { rota: '/contas-pagar', rotulo: 'Contas a pagar', icone: IconReceiptRefund },
+      { rota: '/despesas-recorrentes', rotulo: 'Despesas recorrentes', icone: IconCalendarRepeat, permissao: 'verSaldos' },
       { rota: '/cartoes', rotulo: 'Cartões de crédito', icone: IconCreditCard, permissao: 'verSaldos' },
       { rota: '/extrato', rotulo: 'Extrato bancário', icone: IconFileSpreadsheet, permissao: 'verSaldos' },
       { rota: '/conciliacao', rotulo: 'Conciliação bancária', icone: IconChecklist, permissao: 'verSaldos' },

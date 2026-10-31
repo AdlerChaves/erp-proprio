@@ -5,6 +5,8 @@ import { Sessao } from '../auth/sessao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { DreDto, ResumoCentroCustoDto } from './dto/dre.dto';
 import { FluxoCaixaDto } from './dto/fluxo-caixa.dto';
+import { ProjecaoDto } from './dto/projecao.dto';
+import { ProjecaoService } from './projecao.service';
 import { RelatoriosService } from './relatorios.service';
 
 @ApiTags('financeiro')
@@ -12,11 +14,20 @@ import { RelatoriosService } from './relatorios.service';
 @Perfis(Perfil.ADMIN, Perfil.FINANCEIRO, Perfil.CONSULTA)
 @Controller('financeiro')
 export class RelatoriosController {
-  constructor(private readonly service: RelatoriosService) {}
+  constructor(
+    private readonly service: RelatoriosService,
+    private readonly projecaoService: ProjecaoService,
+  ) {}
 
   @Get('fluxo-caixa')
   fluxoCaixa(@SessaoAtual() sessao: Sessao, @Query() filtro: FluxoCaixaDto) {
     return this.service.fluxoCaixa(sessao.empresaId, filtro);
+  }
+
+  /** Saldo projetado dia a dia até `ate`, com o que entra e sai em cada dia e as contas vencidas à parte. */
+  @Get('projecao')
+  projecao(@SessaoAtual() sessao: Sessao, @Query() dto: ProjecaoDto) {
+    return this.projecaoService.projecao(sessao.empresaId, dto);
   }
 
   @Get('dre')

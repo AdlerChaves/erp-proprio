@@ -114,6 +114,10 @@ export interface ContaFinanceira {
   fornecedor?: Pessoa;
   /** Conta a pagar que é a fatura de um cartão: mantida pelo cartão, não editada à mão. */
   faturaCartaoId?: string | null;
+  /** Conta a pagar lançada por uma despesa recorrente. */
+  despesaRecorrenteId?: string | null;
+  /** Lançada com valor previsto: corrija o valor quando a conta de verdade chegar. */
+  estimada?: boolean;
 }
 
 export interface Saldos {
@@ -596,4 +600,42 @@ export interface MesContratos {
   competencia: string;
   itens: CobrancaDoMes[];
   resumo: { contratos: number; gerado: number; aGerar: number; pendencias: number };
+}
+
+export type TipoValorDespesa = 'FIXO' | 'ESTIMADO' | 'PERCENTUAL_FATURAMENTO';
+export type AjusteDiaUtil = 'ANTECIPAR' | 'POSTERGAR' | 'MANTER';
+export type SituacaoDespesa = 'ATIVA' | 'PAUSADA' | 'ENCERRADA';
+
+/** Próximo vencimento de uma despesa recorrente, lançado (contaId) ou ainda previsto. */
+export interface VencimentoPrevisto {
+  competencia: string;
+  vencimento: string;
+  /** Dia em que a conta a pagar é (ou foi) lançada. */
+  lancamento: string;
+  valor: number;
+  estimado: boolean;
+  /** Como o valor foi calculado ("Valor fixo", "Média das últimas contas"...). */
+  base: string;
+  contaId: string | null;
+}
+
+export interface DespesaRecorrente {
+  id: string;
+  fornecedorId: string;
+  fornecedor: Pessoa;
+  descricao: string;
+  situacao: SituacaoDespesa;
+  tipoValor: TipoValorDespesa;
+  valor: number | null;
+  percentual: number | null;
+  intervaloMeses: number;
+  diaVencimento: number;
+  ajusteDiaUtil: AjusteDiaUtil;
+  inicio: string;
+  fim: string | null;
+  diasAntecedencia: number;
+  planoContaId: string | null;
+  centroCustoId: string | null;
+  observacoes: string | null;
+  proximas: VencimentoPrevisto[];
 }

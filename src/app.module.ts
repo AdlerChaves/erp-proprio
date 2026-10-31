@@ -17,6 +17,7 @@ import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancari
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
 import { ContasReceberModule } from './modules/contas-receber/contas-receber.module';
 import { ContratosModule } from './modules/contratos/contratos.module';
+import { DespesasRecorrentesModule } from './modules/despesas-recorrentes/despesas-recorrentes.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
 import { EstoqueModule } from './modules/estoque/estoque.module';
 import { FinanceiroModule } from './modules/financeiro/financeiro.module';
@@ -53,6 +54,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     EstoqueModule,
     VendasModule,
     ContratosModule,
+    DespesasRecorrentesModule,
     ComprasModule,
     NfseModule,
     ConsultaCnpjModule,

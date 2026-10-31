@@ -43,9 +43,12 @@ export interface ContaFinanceira {
 }
 
 /** Venda ou compra que gerou a conta. */
-export type OrigemConta = { vendaId: string } | { compraId: string };
+export type OrigemConta =
+  | { vendaId: string }
+  | { compraId: string }
+  | { despesaRecorrenteId: string; competenciaRecorrente: string; estimada: boolean };
 
-/** Conta ou parcelas geradas por uma venda ou compra. */
+/** Conta ou parcelas geradas por uma venda, compra ou despesa recorrente. */
 export interface LancamentoDeOrigem {
   pessoaId: string;
   descricao: string;

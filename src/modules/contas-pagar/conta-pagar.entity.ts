@@ -19,6 +19,7 @@ import { StatusConta } from '../financeiro/status-conta.enum';
 import { PlanoConta } from '../plano-contas/plano-conta.entity';
 import { FaturaCartao } from '../cartoes/fatura-cartao.entity';
 import { Compra } from '../compras/compra.entity';
+import { DespesaRecorrente } from '../despesas-recorrentes/despesa-recorrente.entity';
 
 /** Valor a pagar a um fornecedor. */
 @Entity('contas_pagar')
@@ -29,6 +30,8 @@ import { Compra } from '../compras/compra.entity';
 @Index('IDX_contas_pagar_parcelamento', ['parcelamentoId'])
 @Index('IDX_contas_pagar_compra', ['compraId'])
 @Index('UQ_contas_pagar_fatura_cartao', ['faturaCartaoId'], { unique: true })
+// Uma conta por despesa recorrente e competência, mesmo cancelada: cancelar é "pular este mês", e o agendador não a recria.
+@Index('UQ_contas_pagar_despesa_competencia', ['despesaRecorrenteId', 'competenciaRecorrente'], { unique: true, where: '"despesa_recorrente_id" IS NOT NULL' })
 export class ContaPagar implements ContaFinanceira {
   @PrimaryGeneratedColumn('uuid', { primaryKeyConstraintName: 'PK_contas_pagar' })
   id: string;
@@ -102,6 +105,21 @@ export class ContaPagar implements ContaFinanceira {
   @ManyToOne(() => FaturaCartao, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'fatura_cartao_id', foreignKeyConstraintName: 'FK_contas_pagar_fatura_cartao' })
   faturaCartao: FaturaCartao | null;
+
+  /** Despesa recorrente que lançou esta conta, e de qual mês (AAAA-MM). */
+  @Column({ name: 'despesa_recorrente_id', type: 'uuid', nullable: true })
+  despesaRecorrenteId: string | null;
+
+  @ManyToOne(() => DespesaRecorrente, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'despesa_recorrente_id', foreignKeyConstraintName: 'FK_contas_pagar_despesa_recorrente' })
+  despesaRecorrente: DespesaRecorrente | null;
+
+  @Column({ name: 'competencia_recorrente', type: 'char', length: 7, nullable: true })
+  competenciaRecorrente: string | null;
+
+  /** Lançada com valor previsto (despesa variável ou sobre o faturamento); deixa de ser quando o valor é corrigido. */
+  @Column({ default: false })
+  estimada: boolean;
 
   @OneToMany(() => Baixa, (baixa) => baixa.contaPagar)
   baixas: Baixa[];

@@ -8,6 +8,7 @@ import { CentrosCusto } from './paginas/CentrosCusto';
 import { Conciliacao } from './paginas/Conciliacao';
 import { Compras } from './paginas/Compras';
 import { Contratos } from './paginas/Contratos';
+import { DespesasRecorrentes } from './paginas/DespesasRecorrentes';
 import { ContasBancarias } from './paginas/ContasBancarias';
 import { Contas, PAGAR, RECEBER } from './paginas/Contas';
 import { Dre } from './paginas/Dre';
@@ -20,6 +21,7 @@ import { Painel } from './paginas/Painel';
 import { CLIENTES, FORNECEDORES, Pessoas } from './paginas/Pessoas';
 import { PlanoContas } from './paginas/PlanoContas';
 import { Produtos } from './paginas/Produtos';
+import { Projecao } from './paginas/Projecao';
 import { Usuarios } from './paginas/Usuarios';
 import { Vendas } from './paginas/Vendas';
 import { useSessao } from './sessao/sessao';
@@ -75,6 +77,8 @@ export const rotas = createBrowserRouter([
           { path: '/extrato', element: <Extrato /> },
           { path: '/conciliacao', element: <Conciliacao /> },
           { path: '/dre', element: <Dre /> },
+          { path: '/projecao', element: <Projecao /> },
+          { path: '/despesas-recorrentes', element: <DespesasRecorrentes /> },
           { path: '/produtos', element: <Produtos /> },
           { path: '/contas-bancarias', element: <ContasBancarias /> },
           { path: '/plano-contas', element: <PlanoContas /> },
