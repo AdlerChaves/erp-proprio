@@ -24,7 +24,7 @@ export function NotasServico() {
     <>
       <Cabecalho
         titulo="Notas de serviço"
-        descricao="DPS geradas a partir das vendas faturadas. Emita no portal da prefeitura e registre aqui o número da NFS-e."
+        descricao="DPS geradas a partir das vendas faturadas. Transmita pelo menu de cada nota: o ERP assina e emite a NFS-e no Emissor Nacional."
       />
       <Card withBorder padding={0}>
         <Tabs value={aba} onChange={(v) => setAba((v as typeof aba) ?? 'PENDENTE')}>
@@ -102,6 +102,11 @@ export function NotasServico() {
                       <Badge variant="light" color={STATUS_NOTA[n.status].cor}>
                         {STATUS_NOTA[n.status].rotulo}
                       </Badge>
+                      {n.status === 'PENDENTE' && n.erroTransmissao && (
+                        <Text size="xs" c="red" lineClamp={3} title={n.erroTransmissao}>
+                          {n.erroTransmissao}
+                        </Text>
+                      )}
                     </Table.Td>
                     <Table.Td>
                       <MenuAcoes rotulo={`DPS ${n.numeroDps}`} itens={acoes.itens(n)} />

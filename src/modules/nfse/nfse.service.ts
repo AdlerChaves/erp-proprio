@@ -1,6 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, FindOptionsWhere, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { decifrar } from '../../common/cifra';
+import { gerarPdf } from '../documentos/documento-pdf';
 import { dataHoraComFuso, hoje } from '../../common/datas';
 import { centavos, reais } from '../../common/dinheiro';
 import { documentoValido } from '../../common/documento';
@@ -11,17 +13,23 @@ import { Empresa, RegimeTributario } from '../empresas/empresa.entity';
 import { TipoProduto } from '../produtos/produto.entity';
 import { ItemVenda } from '../vendas/item-venda.entity';
 import { StatusVenda, Venda } from '../vendas/venda.entity';
+import { assinarDps, assinarPedidoEvento } from './assinatura';
+import { abrirCertificado } from './certificado';
 import { CancelarNotaServicoDto } from './dto/cancelar-nota.dto';
 import { FiltroNotasServicoDto } from './dto/filtro-notas.dto';
 import { GerarNotaServicoDto } from './dto/gerar-nota.dto';
 import { RegistrarEmissaoDto } from './dto/registrar-emissao.dto';
-import { gerarDps, validarDps } from './dps';
+import { comDataHoraEmissao, gerarDps, idDoXml, validarDps } from './dps';
+import { montarDanfse } from './danfse';
+import { EVENTO_CANCELAMENTO, gerarPedidoCancelamento, motivoDoEvento, validarPedidoEvento } from './evento';
 import { NotaServico, StatusNotaServico } from './nota-servico.entity';
+import { FalhaComunicacaoSefinError, NfseGerada, RecusaSefinError, SefinCliente } from './sefin';
 
 const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 /** O Intl separa "R$" do valor com espaço não separável; no documento fiscal, espaço comum. */
 const moeda = (valor: number) => MOEDA.format(valor).replace(/\u00a0/g, ' ');
 const QTD = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
+const campo = (xml: string, nome: string) => xml.match(new RegExp(`<${nome}>([^<]*)</${nome}>`))?.[1];
 
 @Injectable()
 export class NfseService {
@@ -31,6 +39,7 @@ export class NfseService {
     @InjectRepository(Empresa) private readonly empresas: Repository<Empresa>,
     @InjectRepository(Venda) private readonly vendas: Repository<Venda>,
     @InjectRepository(Cliente) private readonly clientes: Repository<Cliente>,
+    private readonly sefin: SefinCliente,
   ) {}
 
   findAll(empresaId: string, filtro: FiltroNotasServicoDto) {
@@ -52,7 +61,7 @@ export class NfseService {
     return nota;
   }
 
-  /** O XML da DPS, para importar no portal da prefeitura ou conferir. */
+  /** O XML da DPS, para conferir ou importar em outro emissor. */
   async xml(empresaId: string, id: string) {
     const nota = await this.repo.findOne({ where: { id, empresaId }, select: { id: true, serie: true, numeroDps: true, xmlDps: true } });
     if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
@@ -184,7 +193,7 @@ export class NfseService {
     return this.repo.find({ where: { id: In(ids) }, relations: { cliente: true, venda: true }, order: { numeroDps: 'ASC' } });
   }
 
-  /** Registra o número da NFS-e emitida no portal da prefeitura. */
+  /** Registra o número de uma NFS-e emitida fora do ERP (no site do Emissor Nacional ou no portal da prefeitura). */
   async registrarEmissao(empresaId: string, id: string, dto: RegistrarEmissaoDto) {
     const nota = await this.findOne(empresaId, id);
     if (nota.status !== StatusNotaServico.PENDENTE) {
@@ -203,12 +212,205 @@ export class NfseService {
     return this.findOne(empresaId, id);
   }
 
-  /** Cancela no ERP. Se a NFS-e já foi emitida, ela precisa ter sido cancelada também no portal da prefeitura. */
+  /** O XML da NFS-e devolvido pelo Emissor Nacional. */
+  async xmlNfse(empresaId: string, id: string) {
+    const nota = await this.repo.findOne({ where: { id, empresaId }, select: { id: true, numeroNfse: true, chaveAcesso: true, xmlNfse: true } });
+    if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
+    if (!nota.xmlNfse) throw new NotFoundException('Esta nota não foi emitida pelo ERP; o XML dela está no Emissor Nacional');
+    return { nome: `NFSe-${nota.chaveAcesso ?? nota.numeroNfse}.xml`, conteudo: nota.xmlNfse };
+  }
+
+  /**
+   * Emite a NFS-e no Emissor Nacional: assina a DPS com o certificado A1 da empresa e a envia à Sefin Nacional,
+   * que valida e devolve a nota na hora. A nota fica travada durante o envio, para dois cliques não emitirem em dobro.
+   * Se uma tentativa anterior falhou sem resposta, confere antes se a Sefin chegou a gerar a nota.
+   */
+  async transmitir(empresaId: string, id: string) {
+    await this.findOne(empresaId, id);
+    const certificado = await this.certificado(empresaId);
+    const falha = await this.dataSource.transaction(async (m) => {
+      const nota = await m
+        .createQueryBuilder(NotaServico, 'n')
+        .addSelect('n.xmlDps')
+        .where('n.id = :id AND n.empresa_id = :empresaId', { id, empresaId })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
+      if (nota.status !== StatusNotaServico.PENDENTE) {
+        throw new BadRequestException(`A nota está ${nota.status.toLowerCase()}; só notas pendentes são transmitidas`);
+      }
+
+      let gerada: NfseGerada | null = null;
+      let enviada = nota.xmlDps;
+      try {
+        if (nota.erroTransmissao) {
+          const chave = await this.sefin.chaveDaDps(nota.ambiente, certificado, idDoXml(nota.xmlDps)!).catch(() => null);
+          if (chave) gerada = await this.sefin.consultar(nota.ambiente, certificado, chave);
+        }
+        if (!gerada) {
+          enviada = assinarDps(comDataHoraEmissao(nota.xmlDps, this.dataHoraEmissao(nota.dataCompetencia)), certificado);
+          gerada = await this.sefin.emitir(nota.ambiente, certificado, enviada);
+        }
+      } catch (erro) {
+        if (!(erro instanceof RecusaSefinError || erro instanceof FalhaComunicacaoSefinError)) throw erro;
+        // O erro fica gravado (o throw desfaria a transação), e a resposta sai depois do commit.
+        await m.update(NotaServico, id, { erroTransmissao: erro.message.slice(0, 1000) });
+        return erro;
+      }
+
+      const dhProc = campo(gerada.xml, 'dhProc');
+      await m.update(NotaServico, id, {
+        status: StatusNotaServico.EMITIDA,
+        chaveAcesso: gerada.chaveAcesso,
+        numeroNfse: campo(gerada.xml, 'nNFSe')?.replace(/^0+(?=\d)/, '') ?? null,
+        dataEmissaoNfse: dhProc && /^\d{4}-\d{2}-\d{2}/.test(dhProc) ? dhProc.slice(0, 10) : hoje(),
+        codigoVerificacao: null,
+        emitidaNoErp: true,
+        xmlDps: enviada,
+        xmlNfse: gerada.xml,
+        erroTransmissao: null,
+      });
+      return null;
+    });
+
+    if (falha instanceof RecusaSefinError) throw new BadRequestException(`O Emissor Nacional recusou a nota: ${falha.message}`);
+    if (falha) {
+      throw new BadGatewayException(
+        `${falha.message}. Tente de novo em alguns minutos: antes de reenviar, o ERP confere se a nota chegou a ser gerada.`,
+      );
+    }
+    return this.findOne(empresaId, id);
+  }
+
+  /** O certificado A1 instalado na empresa, já aberto. */
+  private async certificado(empresaId: string) {
+    const empresa = await this.empresas.findOne({ where: { id: empresaId }, select: { id: true, certificadoCifrado: true } });
+    if (!empresa?.certificadoCifrado) {
+      throw new BadRequestException(
+        'Instale o certificado digital A1 da empresa (tela Empresa, em Dados fiscais) para emitir ou cancelar notas no Emissor Nacional',
+      );
+    }
+    let guardado: { pfx: string; senha: string };
+    try {
+      guardado = JSON.parse(decifrar(empresa.certificadoCifrado));
+    } catch {
+      throw new BadRequestException('Não foi possível ler o certificado guardado (a chave do servidor mudou?); instale-o de novo');
+    }
+    const certificado = abrirCertificado(Buffer.from(guardado.pfx, 'base64'), guardado.senha);
+    if (certificado.validoAte < new Date()) {
+      throw new BadRequestException('O certificado digital da empresa venceu; instale o novo na tela Empresa');
+    }
+    return certificado;
+  }
+
+  /**
+   * Data e hora de um envio à Sefin: um minuto antes de agora, porque ela recusa documento "no futuro"
+   * (E0008 na DPS, E1843 no evento) e os relógios nunca batem.
+   */
+  private dataHoraEnvio() {
+    return dataHoraComFuso(new Date(Date.now() - 60_000));
+  }
+
+  /** dhEmi da DPS: a do envio, mas não antes do dia da competência, que não pode ser posterior à emissão. */
+  private dataHoraEmissao(dataCompetencia: string) {
+    const dataHora = this.dataHoraEnvio();
+    return dataHora.slice(0, 10) < dataCompetencia ? `${dataCompetencia}T00:00:00${dataHora.slice(19)}` : dataHora;
+  }
+
+  /**
+   * Cancela a nota. A NFS-e emitida pelo ERP é cancelada no Emissor Nacional, por evento; a emitida fora do ERP
+   * precisa ser cancelada lá à mão, e aqui só se registra; a pendente nunca virou NFS-e.
+   */
   async cancelar(empresaId: string, id: string, dto: CancelarNotaServicoDto) {
     const nota = await this.findOne(empresaId, id);
     if (nota.status === StatusNotaServico.CANCELADA) throw new BadRequestException('A nota já está cancelada');
+    if (nota.status === StatusNotaServico.EMITIDA && nota.emitidaNoErp) return this.cancelarNoEmissor(empresaId, id, dto);
     await this.repo.update(id, { status: StatusNotaServico.CANCELADA, motivoCancelamento: dto.motivo.trim() });
     return this.findOne(empresaId, id);
+  }
+
+  /**
+   * Envia o pedido de cancelamento (evento 101101) assinado com o certificado da empresa. A nota fica travada
+   * durante o envio. Se a Sefin recusar, confere antes se a nota já tem cancelamento: é o caso de uma tentativa
+   * anterior cuja resposta se perdeu, e então o cancelamento é só reconhecido.
+   */
+  private async cancelarNoEmissor(empresaId: string, id: string, dto: CancelarNotaServicoDto) {
+    const motivo = dto.motivo.trim().replace(/\s+/g, ' ');
+    if (!dto.codigoMotivo) {
+      throw new BadRequestException('Informe o motivo do cancelamento: erro na emissão, serviço não prestado ou outros');
+    }
+    if (motivo.length < 15) {
+      throw new BadRequestException('Descreva o motivo do cancelamento com pelo menos 15 caracteres (exigência do Emissor Nacional)');
+    }
+    const empresa = await this.empresas.findOneByOrFail({ id: empresaId });
+    const certificado = await this.certificado(empresaId);
+
+    const falha = await this.dataSource.transaction(async (m) => {
+      const nota = await m.findOne(NotaServico, { where: { id, empresaId }, lock: { mode: 'pessimistic_write' } });
+      if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
+      if (nota.status !== StatusNotaServico.EMITIDA) {
+        throw new BadRequestException(`A nota está ${nota.status.toLowerCase()}; só notas emitidas são canceladas no Emissor Nacional`);
+      }
+      const chave = nota.chaveAcesso!;
+      const pedido = gerarPedidoCancelamento({
+        ambiente: nota.ambiente,
+        dataHoraEvento: this.dataHoraEnvio(),
+        cnpjAutor: empresa.cnpj,
+        chaveAcesso: chave,
+        motivo: dto.codigoMotivo!,
+        descricao: motivo,
+      });
+      const erros = await validarPedidoEvento(pedido);
+      if (erros.length) {
+        throw new BadRequestException(`O pedido de cancelamento não passou na validação do esquema oficial: ${erros.join('; ')}`);
+      }
+
+      let evento: string;
+      try {
+        evento = await this.sefin.registrarEvento(nota.ambiente, certificado, chave, assinarPedidoEvento(pedido, certificado));
+      } catch (erro) {
+        if (!(erro instanceof RecusaSefinError || erro instanceof FalhaComunicacaoSefinError)) throw erro;
+        const existente = erro instanceof RecusaSefinError
+          ? await this.sefin.evento(nota.ambiente, certificado, chave, EVENTO_CANCELAMENTO).catch(() => null)
+          : null;
+        if (!existente) return erro;
+        evento = existente;
+      }
+      await m.update(NotaServico, id, {
+        status: StatusNotaServico.CANCELADA,
+        motivoCancelamento: motivoDoEvento(evento) ?? motivo,
+        xmlCancelamento: evento,
+      });
+      return null;
+    });
+
+    if (falha instanceof RecusaSefinError) throw new BadRequestException(`O Emissor Nacional recusou o cancelamento: ${falha.message}`);
+    if (falha) {
+      throw new BadGatewayException(
+        `${falha.message}. A nota continua emitida no ERP; tente de novo em alguns minutos: se o cancelamento já tiver sido registrado, o ERP o reconhece.`,
+      );
+    }
+    return this.findOne(empresaId, id);
+  }
+
+  /** O XML do evento de cancelamento registrado no Emissor Nacional. */
+  async xmlCancelamento(empresaId: string, id: string) {
+    const nota = await this.repo.findOne({ where: { id, empresaId }, select: { id: true, chaveAcesso: true, xmlCancelamento: true } });
+    if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
+    if (!nota.xmlCancelamento) throw new NotFoundException('Esta nota não foi cancelada no Emissor Nacional pelo ERP');
+    return { nome: `Cancelamento-NFSe-${nota.chaveAcesso}.xml`, conteudo: nota.xmlCancelamento };
+  }
+
+  /** DANFSe: a representação em PDF da NFS-e emitida pelo ERP, montada a partir do XML devolvido pela Sefin. */
+  async danfse(empresaId: string, id: string) {
+    const nota = await this.repo.findOne({
+      where: { id, empresaId },
+      select: { id: true, status: true, ambiente: true, numeroNfse: true, chaveAcesso: true, xmlNfse: true },
+    });
+    if (!nota) throw new NotFoundException(`Nota de serviço ${id} não encontrada`);
+    if (!nota.xmlNfse) throw new NotFoundException('Esta nota não foi emitida pelo ERP; o DANFSe dela está no Emissor Nacional');
+    const pdf = await gerarPdf(montarDanfse(nota.xmlNfse, { cancelada: nota.status === StatusNotaServico.CANCELADA }));
+    return { nome: `DANFSe-${nota.numeroNfse ?? nota.chaveAcesso}.pdf`, conteudo: pdf };
   }
 
   /** O que falta no cadastro da empresa para emitir; a mensagem lista tudo de uma vez. */

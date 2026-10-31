@@ -14,7 +14,7 @@ import { Empresa } from '../empresas/empresa.entity';
 import { Venda } from '../vendas/venda.entity';
 
 export enum StatusNotaServico {
-  /** DPS gerada; falta emitir no portal da prefeitura e registrar o número da NFS-e. */
+  /** DPS gerada; falta transmitir ao Emissor Nacional (ou registrar o número da NFS-e emitida fora do ERP). */
   PENDENTE = 'PENDENTE',
   EMITIDA = 'EMITIDA',
   CANCELADA = 'CANCELADA',
@@ -103,9 +103,25 @@ export class NotaServico {
   @Column({ name: 'aliquota_iss', type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: decimalTransformer })
   aliquotaIss: number | null;
 
-  /** DPS no leiaute nacional, já validada contra o XSD oficial. */
+  /** DPS no leiaute nacional, já validada contra o XSD oficial. Depois da transmissão, a versão assinada que foi enviada. */
   @Column({ name: 'xml_dps', type: 'text', select: false })
   xmlDps: string;
+
+  /** NFS-e devolvida pelo Emissor Nacional; nula se a nota foi emitida fora do ERP. */
+  @Column({ name: 'xml_nfse', type: 'text', nullable: true, select: false })
+  xmlNfse?: string | null;
+
+  /** A NFS-e foi emitida pelo ERP no Emissor Nacional: há o XML dela, o DANFSe e o cancelamento por evento. */
+  @Column({ name: 'emitida_no_erp', default: false })
+  emitidaNoErp: boolean;
+
+  /** Evento de cancelamento (101101) registrado pelo Emissor Nacional; nulo se a nota não foi cancelada lá pelo ERP. */
+  @Column({ name: 'xml_cancelamento', type: 'text', nullable: true, select: false })
+  xmlCancelamento?: string | null;
+
+  /** Por que a última transmissão falhou; some quando a nota é emitida. */
+  @Column({ name: 'erro_transmissao', type: 'varchar', length: 1000, nullable: true })
+  erroTransmissao: string | null;
 
   @Column({ name: 'numero_nfse', type: 'varchar', length: 15, nullable: true })
   numeroNfse: string | null;

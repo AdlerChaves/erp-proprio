@@ -1,14 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { validateXML } from 'xmllint-wasm';
 import type { EnderecoDto } from '../../common/endereco.dto';
 import { RegimeTributario } from '../empresas/empresa.entity';
+import { validarXml, VERSAO_LEIAUTE } from './esquemas';
+
+export { PADRAO_SERIE_OFICIAL } from './esquemas';
 
 /**
  * Declaração de Prestação de Serviços (DPS) no leiaute nacional da NFS-e, versão 1.01.
  * As regras citadas (E0xxx) são as do Anexo I da documentação técnica (gov.br/nfse).
  */
-export const VERSAO_DPS = '1.01';
+export const VERSAO_DPS = VERSAO_LEIAUTE;
 export const VERSAO_APLICATIVO = 'erp-proprio-0.1';
 
 export interface DadosDps {
@@ -65,7 +65,7 @@ const escapar = (texto: string) =>
  * Os campos de texto simples da DPS só aceitam caracteres até U+00FF (Latin-1), sem espaço nas pontas.
  * Troca o que for possível pela forma sem acento composto e descarta o resto.
  */
-function texto(valor: string, maximo: number) {
+export function texto(valor: string, maximo: number) {
   const latin1 = [...valor.normalize('NFC')]
     .map((c) => (c.charCodeAt(0) <= 0xff ? c : c.normalize('NFD').replace(/[^\x00-\xff]/g, '')))
     .join('');
@@ -78,7 +78,7 @@ const descricao = (valor: string) => escapar(valor.trim().slice(0, 2000));
 const decimal = (valor: number) => valor.toFixed(2);
 const digitos = (valor: string) => valor.replace(/\D/g, '');
 
-const tag = (nome: string, conteudo: string | null | undefined | false) =>
+export const tag = (nome: string, conteudo: string | null | undefined | false) =>
   conteudo === null || conteudo === undefined || conteudo === false || conteudo === '' ? '' : `<${nome}>${conteudo}</${nome}>`;
 
 /** Identificador: "DPS" + município (7) + tipo de inscrição (1) + CNPJ/CPF (14) + série (5) + número (15). */
@@ -171,32 +171,11 @@ export function gerarDps(d: DadosDps) {
   );
 }
 
-const PASTA_ESQUEMAS = join(__dirname, 'esquemas', VERSAO_DPS);
+/** Troca o dhEmi de uma DPS ainda não assinada (a data de emissão vale a do envio, não a da geração). */
+export const comDataHoraEmissao = (xml: string, dataHora: string) => xml.replace(/<dhEmi>[^<]*<\/dhEmi>/, tag('dhEmi', dataHora));
 
-/**
- * No XSD oficial, o padrão da série é "^0{0,4}\d{1,5}$". Em expressões de XSD, ^ e $ não são âncoras, e sim
- * caracteres comuns, então um validador estrito (libxml2) recusa qualquer série real. Os arquivos oficiais
- * ficam intactos; a correção é aplicada só na leitura.
- */
-export const PADRAO_SERIE_OFICIAL = '<xs:pattern value="^0{0,4}\\d{1,5}$"/>';
-const corrigirEsquema = (conteudo: string) => conteudo.replace(PADRAO_SERIE_OFICIAL, '<xs:pattern value="0{0,4}\\d{1,5}"/>');
-
-const arquivo = (nome: string) => ({
-  fileName: nome,
-  contents: corrigirEsquema(readFileSync(join(PASTA_ESQUEMAS, nome), 'utf8')),
-});
-let esquemas: { principal: ReturnType<typeof arquivo>; dependencias: ReturnType<typeof arquivo>[] } | undefined;
+/** O Id do infDPS, que identifica a DPS na Sefin. */
+export const idDoXml = (xml: string) => xml.match(/<infDPS Id="([^"]+)"/)?.[1] ?? null;
 
 /** Valida a DPS contra o XSD oficial; devolve as mensagens de erro (vazio se estiver válida). */
-export async function validarDps(xml: string) {
-  esquemas ??= {
-    principal: arquivo('DPS_v1.01.xsd'),
-    dependencias: ['tiposComplexos_v1.01.xsd', 'tiposSimples_v1.01.xsd', 'xmldsig-core-schema.xsd'].map(arquivo),
-  };
-  const resultado = await validateXML({
-    xml: [{ fileName: 'dps.xml', contents: xml }],
-    schema: [esquemas.principal],
-    preload: esquemas.dependencias,
-  });
-  return resultado.errors.map((e) => e.message);
-}
+export const validarDps = (xml: string) => validarXml(xml, 'dps');

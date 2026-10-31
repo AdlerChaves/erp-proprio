@@ -27,6 +27,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-28800}
       APP_TIMEZONE: ${APP_TIMEZONE:-America/Sao_Paulo}
+      # Cifra o certificado A1 da NFS-e no banco; sem ela, não dá para instalar o certificado.
+      CHAVE_CERTIFICADOS: ${CHAVE_CERTIFICADOS:-}
       # Ambiente de desenvolvimento: mantém o Swagger em /docs. Desligue ao publicar.
       SWAGGER_HABILITADO: ${SWAGGER_HABILITADO:-true}
       CORS_ORIGENS: ${CORS_ORIGENS:-}

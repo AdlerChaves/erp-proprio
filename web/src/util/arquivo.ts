@@ -8,3 +8,6 @@ export const lerComoDataUrl = (arquivo: File) =>
     leitor.onerror = () => rejeitar(new Error('Não foi possível ler o arquivo'));
     leitor.readAsDataURL(arquivo);
   });
+
+/** Conteúdo do arquivo em base64 puro (sem o prefixo "data:"), como a API recebe o certificado digital. */
+export const lerComoBase64 = async (arquivo: File) => (await lerComoDataUrl(arquivo)).replace(/^data:[^,]*,/, '');

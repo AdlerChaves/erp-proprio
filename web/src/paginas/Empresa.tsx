@@ -1,4 +1,24 @@
-import { Alert, Badge, Button, Card, Grid, Group, Loader, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  FileInput,
+  Grid,
+  Group,
+  Loader,
+  Modal,
+  NumberInput,
+  PasswordInput,
+  SegmentedControl,
+  Select,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,11 +26,12 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
 import type { DadosCep, Empresa as DadosEmpresa, RegimeTributario } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, ErroCarregamento } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento } from '../componentes/comum';
 import { CampoCep, enderecoDoCep } from '../componentes/Cep';
 import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
+import { lerComoBase64 } from '../util/arquivo';
 import { digitos, documento, documentoValido } from '../util/formato';
 import { FormProposta } from './EmpresaProposta';
 import { PERFIS } from './Usuarios';
@@ -343,7 +364,8 @@ function FormFiscal({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar
             {...form.getInputProps('nfseAmbiente')}
           />
           <Text size="xs" c="dimmed" mt={4}>
-            Vale para o envio automático, quando ele for ligado. Hoje a nota é emitida no portal da prefeitura.
+            Em homologação, a nota vai para o ambiente de testes do Emissor Nacional e não tem valor fiscal. Em produção, a nota é
+            real.
           </Text>
         </div>
         {form.values.regimeTributario && !simples && form.values.regimeTributario !== 'MEI' && (
@@ -358,6 +380,106 @@ function FormFiscal({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar
         )}
       </Stack>
     </form>
+  );
+}
+
+/** Certificado digital A1 (e-CNPJ) que assina e transmite a nota de serviço ao Emissor Nacional. */
+function FormCertificado({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
+  const queryClient = useQueryClient();
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [senha, setSenha] = useState('');
+  const [removendo, setRemovendo] = useState(false);
+  const atualizar = (atualizada: DadosEmpresa) => queryClient.setQueryData(['/empresas/atual'], atualizada);
+  const instalar = useMutation({
+    mutationFn: async () => {
+      if (!arquivo) throw new Error('Escolha o arquivo do certificado (.pfx ou .p12)');
+      if (arquivo.size > 64 * 1024) throw new Error('O arquivo é grande demais para um certificado A1');
+      return api.put<DadosEmpresa>('/empresas/atual/certificado', { certificado: await lerComoBase64(arquivo), senha });
+    },
+    onSuccess: (atualizada) => {
+      atualizar(atualizada);
+      setArquivo(null);
+      setSenha('');
+      avisarSucesso('Certificado instalado');
+    },
+    onError: avisarErro,
+  });
+  const remover = useMutation({
+    mutationFn: () => api.delete('/empresas/atual/certificado'),
+    onSuccess: () => {
+      atualizar({ ...empresa, certificadoTitular: null, certificadoValidade: null });
+      setRemovendo(false);
+      avisarSucesso('Certificado removido');
+    },
+    onError: avisarErro,
+  });
+
+  const validade = empresa.certificadoValidade ? new Date(empresa.certificadoValidade) : null;
+  const dias = validade ? Math.floor((validade.getTime() - Date.now()) / 86_400_000) : null;
+  return (
+    <Stack>
+      {validade && dias !== null ? (
+        <Group justify="space-between" wrap="nowrap">
+          <div>
+            <Text size="sm" fw={500}>
+              {empresa.certificadoTitular}
+            </Text>
+            <Text size="xs" c="dimmed">
+              Válido até {validade.toLocaleDateString('pt-BR')}
+            </Text>
+          </div>
+          <Group gap="xs" wrap="nowrap">
+            <Badge variant="light" color={dias < 0 ? 'red' : dias <= 30 ? 'orange' : 'teal'}>
+              {dias < 0 ? 'Vencido' : dias <= 30 ? `Vence em ${dias} dia${dias === 1 ? '' : 's'}` : 'Instalado'}
+            </Badge>
+            {podeEditar && (
+              <Button size="xs" variant="subtle" color="red" onClick={() => setRemovendo(true)}>
+                Remover
+              </Button>
+            )}
+          </Group>
+        </Group>
+      ) : (
+        <Alert color="yellow">Sem certificado, as notas não são transmitidas pelo ERP: só dá para registrar notas emitidas fora dele.</Alert>
+      )}
+      {podeEditar && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            instalar.mutate();
+          }}
+        >
+          <Group align="flex-end">
+            <FileInput
+              label={validade ? 'Trocar pelo certificado novo' : 'Arquivo do certificado A1'}
+              placeholder=".pfx ou .p12"
+              accept=".pfx,.p12,application/x-pkcs12"
+              clearable
+              value={arquivo}
+              onChange={setArquivo}
+              w={260}
+            />
+            <PasswordInput label="Senha do certificado" value={senha} onChange={(e) => setSenha(e.currentTarget.value)} w={220} />
+            <Button type="submit" loading={instalar.isPending} disabled={!arquivo || !senha}>
+              Instalar
+            </Button>
+          </Group>
+          <Text size="xs" c="dimmed" mt="xs">
+            O ERP confere se o certificado é desta empresa e se está no prazo, e o guarda criptografado. Ele nunca volta para o navegador.
+          </Text>
+        </form>
+      )}
+      <Confirmacao
+        aberta={removendo}
+        titulo="Remover certificado"
+        mensagem="O ERP deixa de transmitir notas até um certificado novo ser instalado."
+        rotuloConfirmar="Remover"
+        perigosa
+        carregando={remover.isPending}
+        aoConfirmar={() => remover.mutate()}
+        aoFechar={() => setRemovendo(false)}
+      />
+    </Stack>
   );
 }
 
@@ -488,6 +610,14 @@ export function Empresa() {
             Usados na nota fiscal de serviço
           </Text>
           {empresa.data && <FormFiscal key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Certificado digital</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            Certificado A1 (e-CNPJ) que assina e transmite as notas de serviço ao Emissor Nacional
+          </Text>
+          {empresa.data && <FormCertificado key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
         </Card>
 
         <Card withBorder padding={0}>

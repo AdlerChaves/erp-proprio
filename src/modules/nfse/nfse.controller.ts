@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
@@ -55,6 +55,32 @@ export class NfseController {
     res.send(conteudo);
   }
 
+  /** Arquivo XML da NFS-e emitida pelo ERP no Emissor Nacional. */
+  @Get('notas-servico/:id/xml-nfse')
+  async xmlNfse(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const { nome, conteudo } = await this.service.xmlNfse(sessao.empresaId, id);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(conteudo);
+  }
+
+  /** Arquivo XML do evento de cancelamento registrado no Emissor Nacional. */
+  @Get('notas-servico/:id/xml-cancelamento')
+  async xmlCancelamento(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const { nome, conteudo } = await this.service.xmlCancelamento(sessao.empresaId, id);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(conteudo);
+  }
+
+  /** DANFSe em PDF da NFS-e emitida pelo ERP. */
+  @Get('notas-servico/:id/danfse')
+  async danfse(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const { nome, conteudo } = await this.service.danfse(sessao.empresaId, id);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${nome}"` });
+    return new StreamableFile(conteudo);
+  }
+
   /** Gera a(s) DPS dos serviços de uma venda faturada. */
   @Post('vendas/:id/notas-servico')
   @Perfis(...FISCAL)
@@ -62,7 +88,15 @@ export class NfseController {
     return this.service.gerarParaVenda(sessao.empresaId, id, dto);
   }
 
-  /** Informa o número da NFS-e emitida no portal da prefeitura. */
+  /** Assina a DPS com o certificado da empresa e emite a NFS-e no Emissor Nacional. */
+  @Post('notas-servico/:id/transmissao')
+  @Perfis(...FISCAL)
+  @HttpCode(200)
+  transmitir(@SessaoAtual() sessao: Sessao, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.transmitir(sessao.empresaId, id);
+  }
+
+  /** Informa o número de uma NFS-e emitida fora do ERP. */
   @Post('notas-servico/:id/emissao')
   @Perfis(...FISCAL)
   @HttpCode(200)
@@ -70,6 +104,7 @@ export class NfseController {
     return this.service.registrarEmissao(sessao.empresaId, id, dto);
   }
 
+  /** Cancela a nota; a NFS-e emitida pelo ERP é cancelada no Emissor Nacional, por evento. */
   @Post('notas-servico/:id/cancelamento')
   @Perfis(...FISCAL)
   @HttpCode(200)

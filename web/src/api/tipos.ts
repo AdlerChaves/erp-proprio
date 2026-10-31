@@ -171,6 +171,9 @@ export interface Empresa {
   nfseSerie: string;
   /** 1 = produção, 2 = homologação. */
   nfseAmbiente: 1 | 2;
+  /** Certificado A1 instalado para transmitir a NFS-e: titular e fim da validade. */
+  certificadoTitular: string | null;
+  certificadoValidade: string | null;
   /** Orçamentos e vendas são numerados a partir deste número (ou do último usado, se for maior). */
   numeroInicialVendas: number;
   proposta: ConfigProposta;
@@ -424,6 +427,10 @@ export interface NotaServico {
   chaveAcesso: string | null;
   dataEmissaoNfse: string | null;
   motivoCancelamento: string | null;
+  /** Motivo da última transmissão recusada ou sem resposta; some quando a nota é emitida. */
+  erroTransmissao: string | null;
+  /** Emitida pelo ERP no Emissor Nacional: tem XML, DANFSe e é cancelada por evento lá. */
+  emitidaNoErp: boolean;
 }
 
 /** Dados públicos do CNPJ (Receita Federal), já no formato do cadastro. */

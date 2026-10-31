@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 config();
 process.env.DB_NAME = process.env.DB_TEST_NAME ?? 'erp_test';
 process.env.JWT_SECRET ??= 'segredo-de-teste-com-pelo-menos-32-caracteres';
+process.env.CHAVE_CERTIFICADOS = 'a'.repeat(64);
 // Os testes fazem centenas de requisições do mesmo IP; o teste de segurança baixa estes limites.
 process.env.THROTTLE_LIMITE = '1000000';
 process.env.THROTTLE_LOGIN_LIMITE = '1000000';

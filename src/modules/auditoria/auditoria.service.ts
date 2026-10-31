@@ -8,7 +8,8 @@ import { RegistroAuditoria } from './registro-auditoria.entity';
 export type NovoRegistro = Pick<RegistroAuditoria, 'acao'> &
   Partial<Pick<RegistroAuditoria, 'empresaId' | 'usuarioId' | 'recurso' | 'recursoId' | 'dados' | 'ip'>>;
 
-const CAMPO_SENSIVEL = /senha|password|token|secret/i;
+// "certificado": o arquivo do certificado digital vale tanto quanto a senha dele.
+const CAMPO_SENSIVEL = /senha|password|token|secret|certificado/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Copia o objeto trocando o valor de campos sensíveis, em qualquer nível, por "***". */

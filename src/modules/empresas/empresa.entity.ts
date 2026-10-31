@@ -112,6 +112,17 @@ export class Empresa {
   @Column({ name: 'nfse_ambiente', type: 'smallint', default: AmbienteNfse.HOMOLOGACAO })
   nfseAmbiente: AmbienteNfse;
 
+  /** Certificado A1 (.pfx) e a senha dele, cifrados (ver common/cifra). Nunca sai da API. */
+  @Column({ name: 'certificado_cifrado', type: 'text', nullable: true, select: false })
+  certificadoCifrado?: string | null;
+
+  /** Nome do titular do certificado, para a tela conferir qual está instalado. */
+  @Column({ name: 'certificado_titular', type: 'varchar', length: 255, nullable: true })
+  certificadoTitular: string | null;
+
+  @Column({ name: 'certificado_validade', type: 'timestamptz', nullable: true })
+  certificadoValidade: Date | null;
+
   /**
    * Número mínimo de orçamentos e vendas (a numeração é a mesma: o orçamento aprovado vira pedido e venda).
    * O próximo é o maior entre este e o último usado mais um, então nunca se repete.

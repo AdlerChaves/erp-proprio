@@ -24,7 +24,7 @@ import { api, baixarArquivo, consulta } from '../api/cliente';
 import type { Municipio, NotaServico, ServicoNacional, StatusNotaServico, Venda } from '../api/tipos';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda } from '../util/formato';
-import { avisarErro, avisarSucesso, CampoData, CampoMoeda, MenuAcoes } from './comum';
+import { avisarErro, avisarSucesso, CampoData, CampoMoeda, Confirmacao, MenuAcoes } from './comum';
 
 export const STATUS_NOTA: Record<StatusNotaServico, { rotulo: string; cor: string }> = {
   PENDENTE: { rotulo: 'A emitir', cor: 'yellow' },
@@ -145,7 +145,7 @@ function FormGerar({ venda, aoFechar }: { venda: Venda; aoFechar: () => void }) 
       <Stack>
         <Text size="sm">
           O ERP monta a DPS no padrão nacional com os serviços da venda nº {venda.numero} (produtos não entram) e confere o arquivo contra o
-          esquema oficial. Depois, emita a nota no portal da prefeitura e informe aqui o número dela.
+          esquema oficial. Depois, transmita a nota ao Emissor Nacional pelo menu dela.
         </Text>
         <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <CampoData label="Data da prestação (competência)" {...form.getInputProps('dataCompetencia')} />
@@ -214,7 +214,9 @@ function FormEmissao({ nota, aoFechar }: { nota: NotaServico; aoFechar: () => vo
   return (
     <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
       <Stack>
-        <Text size="sm">Copie os dados da NFS-e emitida no portal da prefeitura para a DPS nº {nota.numeroDps}.</Text>
+        <Text size="sm">
+          Use quando a nota da DPS nº {nota.numeroDps} foi emitida fora do ERP (no site do Emissor Nacional): copie os dados da NFS-e.
+        </Text>
         <SimpleGrid cols={{ base: 1, xs: 2 }}>
           <TextInput label="Número da NFS-e" data-autofocus {...form.getInputProps('numeroNfse')} />
           <CampoData label="Data de emissão" {...form.getInputProps('dataEmissao')} />
@@ -234,30 +236,61 @@ function FormEmissao({ nota, aoFechar }: { nota: NotaServico; aoFechar: () => vo
   );
 }
 
+/** Códigos de motivo do evento de cancelamento da NFS-e nacional (cMotivo). */
+const MOTIVOS_CANCELAMENTO = [
+  { value: '1', label: 'Erro na emissão' },
+  { value: '2', label: 'Serviço não prestado' },
+  { value: '9', label: 'Outros' },
+];
+
 function FormCancelar({ nota, aoFechar }: { nota: NotaServico; aoFechar: () => void }) {
   const invalidar = useInvalidarNotas();
+  // A NFS-e emitida pelo ERP é cancelada no Emissor Nacional, que exige o código e 15 caracteres de motivo.
+  const noEmissor = nota.status === 'EMITIDA' && nota.emitidaNoErp;
+  const minimo = noEmissor ? 15 : 5;
   const form = useForm({
-    initialValues: { motivo: '' },
-    validate: { motivo: (v) => (v.trim().length >= 5 ? null : 'Explique em poucas palavras (mínimo 5 letras)') },
+    initialValues: { motivo: '', codigoMotivo: null as string | null },
+    validate: {
+      motivo: (v) => (v.trim().length >= minimo ? null : `Explique o motivo (mínimo ${minimo} caracteres)`),
+      codigoMotivo: (v) => (noEmissor && !v ? 'Escolha o motivo' : null),
+    },
   });
   const cancelar = useMutation({
-    mutationFn: (v: typeof form.values) => api.post(`/notas-servico/${nota.id}/cancelamento`, { motivo: v.motivo.trim() }),
+    mutationFn: (v: typeof form.values) =>
+      api.post<NotaServico>(`/notas-servico/${nota.id}/cancelamento`, {
+        motivo: v.motivo.trim(),
+        ...(noEmissor ? { codigoMotivo: Number(v.codigoMotivo) } : {}),
+      }),
     onSuccess: () => {
-      invalidar();
-      avisarSucesso('Nota cancelada');
+      avisarSucesso(noEmissor ? `NFS-e nº ${nota.numeroNfse} cancelada no Emissor Nacional` : 'Nota cancelada');
       aoFechar();
     },
     onError: avisarErro,
+    onSettled: invalidar,
   });
   return (
     <form onSubmit={form.onSubmit((v) => cancelar.mutate(v))}>
       <Stack>
-        {nota.status === 'EMITIDA' && (
+        {noEmissor && (
           <Alert color="orange" icon={<IconInfoCircle size={18} />}>
-            Esta NFS-e já foi emitida. Cancele-a também no portal da prefeitura: aqui o ERP só registra o cancelamento.
+            {nota.ambiente === 1
+              ? `A NFS-e nº ${nota.numeroNfse} será cancelada no Emissor Nacional, com o certificado da empresa. Não dá para desfazer.`
+              : 'Ambiente de homologação: o cancelamento vai para o ambiente de testes do Emissor Nacional.'}{' '}
+            O município pode recusar fora do prazo que ele define.
           </Alert>
         )}
-        <TextInput label="Motivo" placeholder="Valor errado; nota substituída" data-autofocus {...form.getInputProps('motivo')} />
+        {nota.status === 'EMITIDA' && !nota.emitidaNoErp && (
+          <Alert color="orange" icon={<IconInfoCircle size={18} />}>
+            Esta NFS-e foi emitida fora do ERP. Cancele-a também no Emissor Nacional: aqui o ERP só registra o cancelamento.
+          </Alert>
+        )}
+        {noEmissor && <Select label="Motivo do cancelamento" data={MOTIVOS_CANCELAMENTO} {...form.getInputProps('codigoMotivo')} />}
+        <TextInput
+          label={noEmissor ? 'Descrição do motivo' : 'Motivo'}
+          placeholder="Valor do serviço informado errado"
+          data-autofocus
+          {...form.getInputProps('motivo')}
+        />
         <Group justify="flex-end">
           <Button variant="default" onClick={aoFechar}>
             Voltar
@@ -271,24 +304,67 @@ function FormCancelar({ nota, aoFechar }: { nota: NotaServico; aoFechar: () => v
   );
 }
 
-/** Ações de uma nota (baixar XML, registrar emissão, cancelar), com os formulários delas. */
+/** Ações de uma nota (transmitir, baixar XML, registrar emissão, cancelar), com os formulários delas. */
 export function useAcoesNota() {
   const { pode } = useSessao();
+  const invalidar = useInvalidarNotas();
+  const [transmitindo, setTransmitindo] = useState<NotaServico | null>(null);
   const [emitindo, setEmitindo] = useState<NotaServico | null>(null);
   const [cancelando, setCancelando] = useState<NotaServico | null>(null);
   const escrever = pode('escreverFinanceiro');
+  const transmitir = useMutation({
+    mutationFn: (nota: NotaServico) => api.post<NotaServico>(`/notas-servico/${nota.id}/transmissao`),
+    onSuccess: (nota) => {
+      avisarSucesso(`NFS-e nº ${nota.numeroNfse} emitida`);
+      setTransmitindo(null);
+    },
+    // A recusa fica gravada na nota: a lista precisa mostrar o motivo.
+    onError: (erro) => {
+      avisarErro(erro);
+      setTransmitindo(null);
+    },
+    onSettled: invalidar,
+  });
 
   const itens = (nota: NotaServico) => [
+    escrever && nota.status === 'PENDENTE' && { texto: 'Transmitir ao Emissor Nacional', aoClicar: () => setTransmitindo(nota) },
+    nota.emitidaNoErp && {
+      texto: 'Baixar DANFSe (PDF)',
+      aoClicar: () => baixarArquivo(`/notas-servico/${nota.id}/danfse`, `DANFSe-${nota.numeroNfse}.pdf`).catch(avisarErro),
+    },
+    nota.emitidaNoErp && {
+      texto: 'Baixar XML da NFS-e',
+      aoClicar: () => baixarArquivo(`/notas-servico/${nota.id}/xml-nfse`, `NFSe-${nota.chaveAcesso}.xml`).catch(avisarErro),
+    },
+    nota.emitidaNoErp &&
+      nota.status === 'CANCELADA' && {
+        texto: 'Baixar XML do cancelamento',
+        aoClicar: () =>
+          baixarArquivo(`/notas-servico/${nota.id}/xml-cancelamento`, `Cancelamento-NFSe-${nota.chaveAcesso}.xml`).catch(avisarErro),
+      },
     nota.status !== 'CANCELADA' && {
       texto: 'Baixar XML da DPS',
       aoClicar: () => baixarArquivo(`/notas-servico/${nota.id}/xml`, `DPS-${nota.serie}-${nota.numeroDps}.xml`).catch(avisarErro),
     },
-    escrever && nota.status === 'PENDENTE' && { texto: 'Registrar emissão', aoClicar: () => setEmitindo(nota) },
+    escrever && nota.status === 'PENDENTE' && { texto: 'Registrar emissão feita fora do ERP', aoClicar: () => setEmitindo(nota) },
     escrever && nota.status !== 'CANCELADA' && { texto: 'Cancelar nota', aoClicar: () => setCancelando(nota), perigosa: true },
   ];
   const modais = (
     <>
-      <Modal opened={emitindo !== null} onClose={() => setEmitindo(null)} title="Registrar NFS-e emitida" size="lg">
+      <Confirmacao
+        aberta={transmitindo !== null}
+        titulo={`Transmitir DPS nº ${transmitindo?.numeroDps ?? ''}`}
+        mensagem={
+          transmitindo?.ambiente === 1
+            ? `O ERP assina a DPS com o certificado da empresa e emite a NFS-e de ${moeda((transmitindo?.valorServicos ?? 0) - (transmitindo?.descontoIncondicionado ?? 0))} para ${transmitindo?.cliente.nome} no Emissor Nacional. A nota tem valor fiscal.`
+            : 'Ambiente de homologação: a nota vai para o ambiente de testes do Emissor Nacional e não tem valor fiscal.'
+        }
+        rotuloConfirmar="Transmitir"
+        carregando={transmitir.isPending}
+        aoConfirmar={() => transmitindo && transmitir.mutate(transmitindo)}
+        aoFechar={() => !transmitir.isPending && setTransmitindo(null)}
+      />
+      <Modal opened={emitindo !== null} onClose={() => setEmitindo(null)} title="Registrar NFS-e emitida fora do ERP" size="lg">
         {emitindo && <FormEmissao nota={emitindo} aoFechar={() => setEmitindo(null)} />}
       </Modal>
       <Modal opened={cancelando !== null} onClose={() => setCancelando(null)} title={`Cancelar DPS nº ${cancelando?.numeroDps ?? ''}`}>
@@ -331,6 +407,11 @@ export function NotasDaVenda({ venda }: { venda: Venda }) {
                   {n.numeroNfse && (
                     <Text size="xs" c="dimmed">
                       NFS-e {n.numeroNfse} em {data(n.dataEmissaoNfse)}
+                    </Text>
+                  )}
+                  {n.status === 'PENDENTE' && n.erroTransmissao && (
+                    <Text size="xs" c="red">
+                      {n.erroTransmissao}
                     </Text>
                   )}
                 </Table.Td>

@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
@@ -8,8 +8,9 @@ import { Perfil } from '../src/modules/usuarios/perfil.enum';
 
 export const SENHA = 'senha12345';
 
-export async function criarApp() {
-  const modulo = await Test.createTestingModule({ imports: [AppModule] }).compile();
+/** `ajustar` troca providers antes de compilar (ex.: apontar a Sefin para um servidor falso). */
+export async function criarApp(ajustar: (m: TestingModuleBuilder) => TestingModuleBuilder = (m) => m) {
+  const modulo = await ajustar(Test.createTestingModule({ imports: [AppModule] })).compile();
   const app = modulo.createNestApplication();
   configurarApp(app);
   await app.init();

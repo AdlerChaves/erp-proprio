@@ -4,6 +4,7 @@ import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
 import { ImagemDto } from '../../common/imagem';
 import { Perfil } from '../usuarios/perfil.enum';
+import { CertificadoDto } from './dto/certificado.dto';
 import { CreateEmpresaDto } from './dto/create-empresa.dto';
 import { UpdateEmpresaDto } from './dto/update-empresa.dto';
 import { EmpresasService } from './empresas.service';
@@ -42,6 +43,20 @@ export class EmpresasController {
   @HttpCode(204)
   removerLogo(@SessaoAtual() sessao: Sessao) {
     return this.service.removerLogo(sessao.empresaId);
+  }
+
+  /** Certificado digital A1 para emitir a NFS-e no Emissor Nacional. Só o titular e a validade voltam. */
+  @Put('atual/certificado')
+  @Perfis(Perfil.ADMIN)
+  definirCertificado(@SessaoAtual() sessao: Sessao, @Body() dto: CertificadoDto) {
+    return this.service.definirCertificado(sessao.empresaId, dto);
+  }
+
+  @Delete('atual/certificado')
+  @Perfis(Perfil.ADMIN)
+  @HttpCode(204)
+  removerCertificado(@SessaoAtual() sessao: Sessao) {
+    return this.service.removerCertificado(sessao.empresaId);
   }
 
   /** Cria outra empresa para o usuário logado; use POST /auth/trocar-empresa para acessá-la. */
