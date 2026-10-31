@@ -20,6 +20,7 @@ import {
   IconPackage,
   IconReceipt,
   IconReceiptRefund,
+  IconRepeat,
   IconShoppingBag,
   IconShoppingCart,
   IconTargetArrow,
@@ -48,6 +49,7 @@ const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
     grupo: 'Comercial',
     itens: [
       { rota: '/vendas', rotulo: 'Vendas', icone: IconShoppingBag },
+      { rota: '/contratos', rotulo: 'Contratos', icone: IconRepeat },
       { rota: '/compras', rotulo: 'Compras', icone: IconShoppingCart, permissao: 'verSaldos' },
       { rota: '/estoque', rotulo: 'Estoque', icone: IconBuildingWarehouse },
       { rota: '/notas-servico', rotulo: 'Notas de serviço', icone: IconFileInvoice },

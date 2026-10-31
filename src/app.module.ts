@@ -16,6 +16,7 @@ import { ConsultaCnpjModule } from './modules/consulta-cnpj/consulta-cnpj.module
 import { ContasBancariasModule } from './modules/contas-bancarias/contas-bancarias.module';
 import { ContasPagarModule } from './modules/contas-pagar/contas-pagar.module';
 import { ContasReceberModule } from './modules/contas-receber/contas-receber.module';
+import { ContratosModule } from './modules/contratos/contratos.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
 import { EstoqueModule } from './modules/estoque/estoque.module';
 import { FinanceiroModule } from './modules/financeiro/financeiro.module';
@@ -51,6 +52,7 @@ import { VendasModule } from './modules/vendas/vendas.module';
     FinanceiroModule,
     EstoqueModule,
     VendasModule,
+    ContratosModule,
     ComprasModule,
     NfseModule,
     ConsultaCnpjModule,

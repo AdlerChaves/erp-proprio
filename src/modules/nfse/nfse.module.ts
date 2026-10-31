@@ -12,5 +12,6 @@ import { OPCOES_SEFIN, opcoesPadrao, SefinCliente } from './sefin';
   imports: [TypeOrmModule.forFeature([NotaServico, Empresa, Venda, Cliente])],
   controllers: [NfseController],
   providers: [NfseService, SefinCliente, { provide: OPCOES_SEFIN, useFactory: opcoesPadrao }],
+  exports: [NfseService],
 })
 export class NfseModule {}

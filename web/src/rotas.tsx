@@ -7,6 +7,7 @@ import { Cartoes } from './paginas/Cartoes';
 import { CentrosCusto } from './paginas/CentrosCusto';
 import { Conciliacao } from './paginas/Conciliacao';
 import { Compras } from './paginas/Compras';
+import { Contratos } from './paginas/Contratos';
 import { ContasBancarias } from './paginas/ContasBancarias';
 import { Contas, PAGAR, RECEBER } from './paginas/Contas';
 import { Dre } from './paginas/Dre';
@@ -65,6 +66,7 @@ export const rotas = createBrowserRouter([
           { path: '/clientes', element: <Pessoas key="clientes" config={CLIENTES} /> },
           { path: '/fornecedores', element: <Pessoas key="fornecedores" config={FORNECEDORES} /> },
           { path: '/vendas', element: <Vendas /> },
+          { path: '/contratos', element: <Contratos /> },
           { path: '/compras', element: <Compras /> },
           { path: '/estoque', element: <Estoque /> },
           { path: '/notas-servico', element: <NotasServico /> },

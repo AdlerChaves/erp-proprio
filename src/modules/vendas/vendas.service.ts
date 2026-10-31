@@ -72,7 +72,8 @@ export class VendasService {
     return { nome, conteudo: await gerarDocumento(dados) };
   }
 
-  async create(empresaId: string, dto: CreateVendaDto) {
+  /** `origem`: a venda gerada por um contrato recorrente, para a competência informada. */
+  async create(empresaId: string, dto: CreateVendaDto, origem?: { contratoId: string; competencia: string }) {
     await this.validarCliente(empresaId, dto.clienteId);
     await this.validarClassificacao(empresaId, dto);
     const { itens, total } = await this.montarItens(empresaId, dto.itens);
@@ -87,6 +88,8 @@ export class VendasService {
           status: dto.status ?? StatusVenda.ORCAMENTO,
           dataEmissao: dto.dataEmissao ?? hoje(),
           total,
+          contratoId: origem?.contratoId ?? null,
+          competenciaContrato: origem?.competencia ?? null,
         }),
       );
       await this.gravarItens(m, venda.id, itens);

@@ -1,6 +1,6 @@
 import { EntityManager } from 'typeorm';
 
-const COLUNAS = { vendas: 'numero', compras: 'numero', notas_servico: 'numero_dps' } as const;
+const COLUNAS = { vendas: 'numero', compras: 'numero', notas_servico: 'numero_dps', contratos: 'numero' } as const;
 
 /** Documentos cuja numeração a empresa pode fazer começar de um número maior que 1. */
 const INICIO: Partial<Record<keyof typeof COLUNAS, string>> = { vendas: 'numero_inicial_vendas' };

@@ -13,6 +13,7 @@ import {
 import { decimalTransformer } from '../../common/decimal.transformer';
 import { CentroCusto } from '../centros-custo/centro-custo.entity';
 import { Cliente } from '../clientes/cliente.entity';
+import { Contrato } from '../contratos/contrato.entity';
 import { Empresa } from '../empresas/empresa.entity';
 import { PlanoConta } from '../plano-contas/plano-conta.entity';
 import { ItemVenda } from './item-venda.entity';
@@ -39,6 +40,10 @@ export enum EscopoServico {
 @Index('UQ_vendas_empresa_numero', ['empresaId', 'numero'], { unique: true })
 @Index('IDX_vendas_empresa_status', ['empresaId', 'status'])
 @Index('IDX_vendas_cliente', ['clienteId'])
+@Index('UQ_vendas_contrato_competencia', ['contratoId', 'competenciaContrato'], {
+  unique: true,
+  where: `"contrato_id" IS NOT NULL AND "status" <> 'CANCELADA'`,
+})
 export class Venda {
   @PrimaryGeneratedColumn('uuid', { primaryKeyConstraintName: 'PK_vendas' })
   id: string;
@@ -103,6 +108,17 @@ export class Venda {
   /** Mostra no orçamento em PDF a tabela de parcelamento no cartão (se a empresa a usa). */
   @Column({ name: 'exibir_parcelamento', default: true })
   exibirParcelamento: boolean;
+
+  /** Contrato recorrente que gerou a venda, e de qual mês (AAAA-MM); nulos na venda avulsa. */
+  @Column({ name: 'contrato_id', type: 'uuid', nullable: true })
+  contratoId: string | null;
+
+  @ManyToOne(() => Contrato, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'contrato_id', foreignKeyConstraintName: 'FK_vendas_contrato' })
+  contrato: Contrato | null;
+
+  @Column({ name: 'competencia_contrato', type: 'char', length: 7, nullable: true })
+  competenciaContrato: string | null;
 
   /** Soma dos itens. */
   @Column({ type: 'numeric', precision: 14, scale: 2, transformer: decimalTransformer })

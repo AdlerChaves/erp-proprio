@@ -555,3 +555,45 @@ export interface ResultadoImportacao {
   conciliadasAutomaticamente: number;
   avisos: string[];
 }
+
+export type SituacaoContrato = 'ATIVO' | 'PAUSADO' | 'ENCERRADO';
+
+/** Cobrança recorrente: os mesmos itens todo mês. Competências no formato AAAA-MM. */
+export interface Contrato {
+  id: string;
+  numero: number;
+  clienteId: string;
+  cliente: Pessoa;
+  descricao: string;
+  situacao: SituacaoContrato;
+  inicio: string;
+  fim: string | null;
+  diaFaturamento: number;
+  diaVencimento: number;
+  emitirNfse: boolean;
+  transmitirNfse: boolean;
+  planoContaId: string | null;
+  centroCustoId: string | null;
+  observacoes: string | null;
+  valor: number;
+  itens?: { id: string; produtoId: string; produto: Produto; quantidade: number; precoUnitario: number; desconto: number; total: number }[];
+}
+
+/** Situação da cobrança de um contrato num mês, calculada pela API. */
+export type EstadoCobranca = 'AGENDADA' | 'A_GERAR' | 'PAUSADO' | 'PROCESSANDO' | 'FALHA' | 'NOTA_PENDENTE' | 'VENDA_CANCELADA' | 'CONCLUIDA';
+
+export interface CobrancaDoMes {
+  contrato: Pick<Contrato, 'id' | 'numero' | 'descricao' | 'situacao' | 'valor' | 'emitirNfse' | 'transmitirNfse'> & { cliente: { id: string; nome: string } };
+  faturamento: string;
+  vencimento: string;
+  estado: EstadoCobranca;
+  geracao: { id: string; situacao: string; erro: string | null; automatica: boolean; atualizadoEm: string } | null;
+  venda: { id: string; numero: number; status: StatusVenda; total: number } | null;
+  notas: { id: string; status: StatusNotaServico; numeroDps: number; numeroNfse: string | null; erroTransmissao: string | null }[];
+}
+
+export interface MesContratos {
+  competencia: string;
+  itens: CobrancaDoMes[];
+  resumo: { contratos: number; gerado: number; aGerar: number; pendencias: number };
+}

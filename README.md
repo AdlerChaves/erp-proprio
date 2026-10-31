@@ -43,6 +43,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Consulta de CEP: ao completar o CEP no endereço do cliente ou da empresa (ou pelo botão de busca), rua, bairro e município são preenchidos e o cursor vai para o número.
 - Consulta de CNPJ: ao digitar um CNPJ válido no cadastro de cliente, fornecedor ou empresa, os dados da Receita Federal são preenchidos (nome, contato, endereço com município) e há aviso se o CNPJ não estiver ativo; nos dados fiscais da empresa, preenche município e regime (Simples/MEI).
 - Nota fiscal de serviço: dados fiscais da empresa, endereço do cliente, código de tributação nacional do serviço; a partir da venda faturada, gera a DPS no padrão nacional, assina com o certificado A1 da empresa e emite a NFS-e no Emissor Nacional, com o DANFSe em PDF; o cancelamento também vai ao Emissor Nacional, por evento; notas emitidas fora do ERP podem ser registradas à mão.
+- Contratos recorrentes: serviços cobrados todo mês (cliente, itens com preço combinado, dia do faturamento e do vencimento, vigência, nota fiscal). No dia combinado, o ERP gera sozinho a venda, fatura (o que lança a conta a receber) e, se o contrato pedir, gera e transmite a NFS-e. A tela mostra cada mês: o que foi gerado, o que está agendado e as pendências (falha, nota recusada), com "gerar agora" e "tentar de novo".
 - Comercial: vendas (orçamento, pedido, faturamento, cancelamento, com aviso antes de faturar sem estoque), compras (pedido, recebimento, cancelamento), orçamento, pedido de venda e pedido de compra em PDF, e estoque (saldo, reservado, disponível, custo médio, ajustes e movimentações por produto). No celular, os itens viram cartões empilhados.
 - Financeiro: painel (saldos, fluxo de caixa de 6 meses, contas em atraso); contas a receber e a pagar (filtros, parcelamento, baixas parciais com juros/multa/desconto, estorno, cancelamento); extrato bancário com saldo linha a linha, lançamentos avulsos e transferências; DRE por competência ou caixa, filtrável por centro de custo.
 - Centros de custo: ao clicar em um (serviço, projeto, loja), um modal mostra o resultado dele no período: receitas, despesas, lucro, margem, valores em aberto, as categorias e os lançamentos.
@@ -131,6 +132,10 @@ Atrás de um proxy reverso, defina `TRUST_PROXY` (ex.: `1`) para que o limite po
 | POST | `/api/vendas/:id/faturamento` | Baixa o estoque e lança as contas a receber; devolve `avisos` de estoque negativo |
 | POST | `/api/vendas/:id/cancelamento` | Cancela; se faturada, devolve o estoque e cancela as contas (`ADMIN`/`FINANCEIRO`) |
 | POST | `/api/compras` · `/:id/recebimento` · `/:id/cancelamento` | Pedido de compra; o recebimento dá entrada no estoque e lança as contas a pagar |
+| GET/POST/PATCH/DELETE | `/api/contratos` · `/:id` | Contratos recorrentes (`ADMIN`/`FINANCEIRO` escrevem; só `ADMIN` exclui, e só contrato que nunca gerou cobrança) |
+| POST | `/api/contratos/:id/pausa` · `/reativacao` · `/encerramento` | Pausa, reativa ou encerra (definitivo) |
+| GET | `/api/contratos/mes?competencia=AAAA-MM` | Situação da cobrança de cada contrato no mês |
+| POST | `/api/contratos/:id/geracoes` · `/api/contratos/geracoes` | Gera (ou retoma) a cobrança de um contrato, ou todas as pendentes do mês (`{ competencia }`) |
 | POST | `/api/vendas/:id/notas-servico` | Gera a DPS (padrão nacional) dos serviços de uma venda faturada, uma por código de tributação nacional |
 | GET | `/api/notas-servico` · `/:id` · `/:id/xml` · `/:id/xml-nfse` · `/:id/xml-cancelamento` | Notas de serviço; XML da DPS (assinada, depois da transmissão), da NFS-e devolvida pelo Emissor Nacional e do evento de cancelamento |
 | GET | `/api/notas-servico/:id/danfse` | DANFSe em PDF da NFS-e emitida pelo ERP |
@@ -230,6 +235,14 @@ Consulta de CNPJ:
 - O CNPJ precisa ter dígitos verificadores válidos antes de qualquer consulta. Os resultados ficam em memória por 7 dias (a base pública é mensal), e há limite próprio por IP (`THROTTLE_CNPJ_LIMITE`, padrão 30 por minuto).
 - Endereço e nomes vêm como a Receita informa, em maiúsculas. CPF não tem consulta pública.
 
+Contratos recorrentes:
+
+- Cada mês de vigência (competência AAAA-MM) gera no máximo uma cobrança por contrato: a tabela `geracoes_contrato` tem uma linha única por contrato e mês, e um índice único na venda (contrato + competência, fora as canceladas) impede venda em dobro mesmo se algo cair no meio.
+- A geração é feita em etapas (venda → faturamento → DPS → transmissão). Se uma etapa falha (cliente sem CPF/CNPJ, produto inativo, dados fiscais faltando), a cobrança fica como falha, com o motivo; "tentar de novo" retoma da etapa que parou, reaproveitando a venda já criada. Recusa da Sefin na transmissão não é falha da cobrança: a nota fica pendente, com o motivo, como em qualquer nota.
+- O faturamento é no dia combinado (dias de 1 a 28, para existir em todo mês). O vencimento fica no mesmo mês ou, se o dia dele vem antes do faturamento, no mês seguinte. Gerar antes do dia (antecipar) fatura na data de hoje, porque nada fiscal pode ter data futura; mês futuro não pode ser gerado.
+- O agendador roda a cada `CONTRATOS_AGENDADOR_MINUTOS` (padrão 60; 0 desliga), confere o mês atual e o anterior, gera o que já chegou ao dia do faturamento e não insiste nas falhas (a pessoa corrige e tenta de novo). Cada geração automática fica na auditoria, sem usuário. Rodar em mais de uma instância da API não duplica nada.
+- Alterar o contrato vale para as próximas cobranças; contrato que já gerou cobrança é encerrado, não excluído.
+
 Nota fiscal de serviço (NFS-e):
 
 - Segue o leiaute nacional da DPS, versão 1.01, com os esquemas XSD oficiais em `src/modules/nfse/esquemas` (ver o `LEIA-ME.md` de lá, inclusive a correção de um padrão do XSD oficial). Toda DPS e todo pedido de evento são validados contra eles antes de serem gravados ou enviados.
@@ -278,6 +291,7 @@ npm run test:e2e
 | `test/dps.e2e-spec.ts` | DPS válida no XSD oficial (Simples com e sem retenção, MEI, pessoa física, desconto, textos), identificador e catálogos |
 | `test/nfse.e2e-spec.ts` | Dados fiscais, geração a partir da venda, uma nota por código, ISS retido, validações, emissão, cancelamentos, concorrência, perfis e isolamento |
 | `test/transmissao-nfse.e2e-spec.ts` | Certificado A1 (senha, arquivo, CNPJ, validade, sigilo na auditoria, perfis) e transmissão e cancelamento numa Sefin simulada com mTLS (que devolve NFS-e válida no XSD oficial): assinatura e esquema conferidos, recusa, resposta perdida sem emissão nem cancelamento em dobro, envios simultâneos, motivo obrigatório, DANFSe, perfis e isolamento |
+| `test/contratos.e2e-spec.ts` | Cadastro e validações, cobrança do mês (venda, conta a receber no vencimento combinado, DPS e transmissão numa Sefin simulada), idempotência e envios simultâneos, retomada depois de falha, venda cancelada, agendador, perfis e isolamento |
 | `test/vendas-estoque.e2e-spec.ts` | Custo médio, kardex, ciclo da venda, reservas, estoque negativo, cancelamentos, compras, numeração e operações simultâneas, perfis e isolamento |
 | `test/sessao-cookie.e2e-spec.ts` | Sessão em cookie httpOnly, CSRF nas escritas, troca de empresa, senha e logout |
 | `test/seguranca.e2e-spec.ts` | Bloqueio por senhas erradas, revogação de tokens, senhas fracas, auditoria (inclusive o filtro por dia no fuso da empresa), cabeçalhos, CORS, limite por IP e segredo do JWT |
