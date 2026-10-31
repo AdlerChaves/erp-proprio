@@ -1,4 +1,4 @@
-import { Alert, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Box, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -10,20 +10,27 @@ import { mesAno, moeda } from '../util/formato';
 
 const MESES_PROJETADOS = 6;
 
-function Indicador({ rotulo, valor, cor, detalhe }: { rotulo: string; valor: number; cor?: string; detalhe?: string }) {
+/**
+ * Número de destaque do painel, em preto. Um ponto colorido ao lado do rótulo marca o que pede atenção, para o
+ * alerta não se perder no meio de números todos coloridos.
+ */
+function Indicador({ rotulo, valor, alerta, detalhe }: { rotulo: string; valor: number; alerta?: 'red' | 'orange'; detalhe?: string }) {
+  // O ponto sinaliza o alerta; o valor só fica vermelho quando é negativo.
+  const ponto = alerta ?? (valor < 0 ? 'red' : undefined);
   return (
-    <Card withBorder padding="lg">
-      <Text size="sm" c="dimmed">
-        {rotulo}
-      </Text>
-      <Text fz={26} fw={700} c={cor ?? (valor < 0 ? 'red.7' : undefined)} style={{ fontVariantNumeric: 'tabular-nums' }}>
+    <Card withBorder padding="md" px="lg">
+      <Group gap={6} wrap="nowrap">
+        {ponto && <Box w={7} h={7} bg={`${ponto}.6`} style={{ borderRadius: '50%', flexShrink: 0 }} />}
+        <Text size="sm" c="dimmed" fw={500}>
+          {rotulo}
+        </Text>
+      </Group>
+      <Text fz={25} fw={600} mt={6} lts="-0.02em" c={valor < 0 ? 'red.8' : undefined} style={{ fontVariantNumeric: 'tabular-nums' }}>
         {moeda(valor)}
       </Text>
-      {detalhe && (
-        <Text size="xs" c="dimmed">
-          {detalhe}
-        </Text>
-      )}
+      <Text size="xs" c="dimmed" mt={2}>
+        {detalhe ?? '\u00a0'}
+      </Text>
     </Card>
   );
 }
@@ -42,6 +49,8 @@ export function Painel() {
   });
 
   const saudacao = `Olá, ${me?.usuario.nome.split(' ')[0]}`;
+  // "Sexta-feira, 30 de outubro"
+  const hojePorExtenso = dayjs().format('dddd, D [de] MMMM').replace(/^./, (c) => c.toUpperCase());
   const aberturas = fluxo.data?.periodos.reduce((soma, p) => soma + p.aberturas, 0) ?? 0;
   if (!permitido) {
     return (
@@ -57,18 +66,24 @@ export function Painel() {
   if (saldos.isError || fluxo.isError) return <ErroCarregamento erro={saldos.error ?? fluxo.error} />;
 
   return (
-    <Stack gap="lg">
-      <Cabecalho titulo={saudacao} descricao="Situação financeira de hoje e projeção dos próximos meses" />
+    <Stack gap="md">
+      <Cabecalho titulo={saudacao} descricao={`${hojePorExtenso} · situação financeira de hoje e projeção dos próximos meses`} />
 
       <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }}>
-        <Indicador rotulo="Saldo em contas" valor={saldos.data.total} />
-        <Indicador rotulo="A receber em atraso" valor={fluxo.data.emAtraso.receber} cor={fluxo.data.emAtraso.receber > 0 ? 'orange.7' : undefined} />
-        <Indicador rotulo="A pagar em atraso" valor={fluxo.data.emAtraso.pagar} cor={fluxo.data.emAtraso.pagar > 0 ? 'red.7' : undefined} />
+        <Indicador rotulo="Saldo em contas" valor={saldos.data.total} detalhe={`${saldos.data.contas.length} conta${saldos.data.contas.length === 1 ? '' : 's'}`} />
         <Indicador
-          rotulo="Saldo projetado"
-          valor={fluxo.data.saldoFinal}
-          detalhe={`Ao fim de ${mesAno(fluxo.data.ate.slice(0, 7))}`}
+          rotulo="A receber em atraso"
+          valor={fluxo.data.emAtraso.receber}
+          alerta={fluxo.data.emAtraso.receber > 0 ? 'orange' : undefined}
+          detalhe={fluxo.data.emAtraso.receber > 0 ? 'Cobrar os clientes' : 'Nada em atraso'}
         />
+        <Indicador
+          rotulo="A pagar em atraso"
+          valor={fluxo.data.emAtraso.pagar}
+          alerta={fluxo.data.emAtraso.pagar > 0 ? 'red' : undefined}
+          detalhe={fluxo.data.emAtraso.pagar > 0 ? 'Vencido e ainda não pago' : 'Nada em atraso'}
+        />
+        <Indicador rotulo="Saldo projetado" valor={fluxo.data.saldoFinal} detalhe={`Ao fim de ${mesAno(fluxo.data.ate.slice(0, 7))}`} />
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, lg: 3 }}>
@@ -77,7 +92,7 @@ export function Painel() {
             Fluxo de caixa
           </Title>
           <Table.ScrollContainer minWidth={560}>
-            <Table striped highlightOnHover style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <Table highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Mês</Table.Th>

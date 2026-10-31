@@ -1,6 +1,8 @@
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
+import '@fontsource-variable/ibm-plex-sans';
+import './estilos.css';
 import { MantineProvider } from '@mantine/core';
 import { DatesProvider } from '@mantine/dates';
 import { Notifications } from '@mantine/notifications';
@@ -13,7 +15,7 @@ import { RouterProvider } from 'react-router-dom';
 import { ApiError } from './api/cliente';
 import { rotas } from './rotas';
 import { SessaoProvider } from './sessao/sessao';
-import { tema } from './tema';
+import { tema, variaveisCss } from './tema';
 
 dayjs.locale('pt-br');
 
@@ -29,7 +31,7 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MantineProvider theme={tema}>
+    <MantineProvider theme={tema} cssVariablesResolver={variaveisCss}>
       <DatesProvider settings={{ locale: 'pt-br', firstDayOfWeek: 0 }}>
         {/* Embaixo, para não cobrir o cabeçalho das gavetas de detalhe, que abrem à direita. */}
         <Notifications position="bottom-right" />

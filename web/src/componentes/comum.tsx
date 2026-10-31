@@ -7,11 +7,11 @@ import { lerDataBR } from '../util/formato';
 
 export function Cabecalho({ titulo, descricao, acoes }: { titulo: string; descricao?: string; acoes?: ReactNode }) {
   return (
-    <Group justify="space-between" align="flex-end" mb="lg" wrap="wrap">
+    <Group justify="space-between" align="flex-end" mb="lg" wrap="wrap" gap="md">
       <div>
         <Title order={2}>{titulo}</Title>
         {descricao && (
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="sm" mt={2}>
             {descricao}
           </Text>
         )}

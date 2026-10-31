@@ -1,12 +1,13 @@
-import { AppShell, Badge, Burger, Group, Menu, Modal, NavLink, ScrollArea, Select, Text, UnstyledButton } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { AppShell, Avatar, Burger, Group, Menu, Modal, ScrollArea, Text, UnstyledButton } from '@mantine/core';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   IconBuilding,
   IconBuildingBank,
   IconBuildingWarehouse,
   IconChartBar,
-  IconChevronDown,
+  IconCheck,
+  IconSelector,
   IconCreditCard,
   IconChecklist,
   IconFileInvoice,
@@ -28,8 +29,10 @@ import {
 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { NavLink as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import type { EmpresaAcessivel } from '../api/tipos';
 import { type Permissao, useSessao } from '../sessao/sessao';
 import { AlterarSenha } from './AlterarSenha';
+import css from './Layout.module.css';
 
 interface ItemMenu {
   rota: string;
@@ -84,16 +87,43 @@ const MENU: { grupo?: string; itens: ItemMenu[] }[] = [
 
 const PERFIS = { ADMIN: 'Administrador', FINANCEIRO: 'Financeiro', VENDAS: 'Vendas', CONSULTA: 'Consulta' };
 
+const nomeEmpresa = (e: EmpresaAcessivel | undefined) => e?.nomeFantasia || e?.razaoSocial || '';
+/** "Marina Albuquerque" → "MA". */
+const iniciais = (nome: string) =>
+  nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .filter((_, i, todas) => i === 0 || i === todas.length - 1)
+    .join('')
+    .toUpperCase();
+
+/** Selo e nome do produto, no menu e nas telas de entrada (`claro` sobre fundo escuro). */
+export function Marca({ claro = false }: { claro?: boolean }) {
+  return (
+    <Group gap={10} wrap="nowrap">
+      <div className={css.selo} data-claro={claro || undefined} aria-hidden>
+        R
+      </div>
+      <Text fw={600} fz={16} lts="-0.01em" c={claro ? 'white' : undefined}>
+        Relda
+      </Text>
+    </Group>
+  );
+}
+
 export function Layout() {
   const [aberto, { toggle, close }] = useDisclosure();
+  const celular = useMediaQuery('(max-width: 48em)');
   const { me, pode, trocarEmpresa, sair } = useSessao();
   const [trocandoSenha, setTrocandoSenha] = useState(false);
   const local = useLocation();
   const navegar = useNavigate();
   if (!me) return null;
 
-  const trocar = async (empresaId: string | null) => {
-    if (!empresaId || empresaId === me.empresaId) return;
+  const atual = me.empresas.find((e) => e.id === me.empresaId) ?? me.empresas[0];
+  const trocar = async (empresaId: string) => {
+    if (empresaId === me.empresaId) return;
     try {
       await trocarEmpresa(empresaId);
       navegar('/');
@@ -109,44 +139,116 @@ export function Layout() {
     navegar('/login');
   };
 
+  const empresa = (
+    <>
+      <Text size="xs" c="dimmed" lh={1.2}>
+        Empresa
+      </Text>
+      <Text size="sm" fw={500} lineClamp={1} lh={1.35}>
+        {nomeEmpresa(atual)}
+      </Text>
+    </>
+  );
+
   return (
-    <AppShell header={{ height: 60 }} navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !aberto } }} padding="lg">
+    <AppShell
+      header={{ height: 56, collapsed: !celular }}
+      navbar={{ width: 256, breakpoint: 'sm', collapsed: { mobile: !aberto } }}
+      padding="sm"
+      classNames={{ navbar: css.navbar, main: css.main }}
+    >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap">
-            <Burger opened={aberto} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Abrir menu" />
-            <Text fw={700} c="teal.7" visibleFrom="xs">
-              Relda ERP
-            </Text>
-            {me.empresas.length > 1 ? (
-              <Select
-                aria-label="Empresa"
-                value={me.empresaId}
-                onChange={trocar}
-                data={me.empresas.map((e) => ({ value: e.id, label: e.nomeFantasia || e.razaoSocial }))}
-                allowDeselect={false}
-                w={{ base: 180, sm: 260 }}
-              />
-            ) : (
-              <Text size="sm" c="dimmed" lineClamp={1}>
-                {me.empresas[0]?.nomeFantasia || me.empresas[0]?.razaoSocial}
-              </Text>
-            )}
-          </Group>
-          <Menu position="bottom-end" withArrow>
-            <Menu.Target>
-              <UnstyledButton aria-label="Menu do usuário">
-                <Group gap={6} wrap="nowrap">
-                  <div style={{ textAlign: 'right' }}>
-                    <Text size="sm" fw={500} lineClamp={1}>
-                      {me.usuario.nome}
+        <Group h="100%" px="md" gap="sm" wrap="nowrap">
+          <Burger opened={aberto} onClick={toggle} size="sm" aria-label="Abrir menu" />
+          <Marca />
+        </Group>
+      </AppShell.Header>
+
+      <AppShell.Navbar px="sm" pt="md" pb="sm">
+        <AppShell.Section px={6} mb="md" visibleFrom="sm">
+          <Marca />
+        </AppShell.Section>
+
+        <AppShell.Section mb={4}>
+          {me.empresas.length > 1 ? (
+            <Menu position="bottom-start" width="target">
+              <Menu.Target>
+                <UnstyledButton className={css.bloco} aria-label="Trocar de empresa">
+                  <div style={{ flex: 1, minWidth: 0 }}>{empresa}</div>
+                  <IconSelector size={16} color="var(--mantine-color-gray-5)" />
+                </UnstyledButton>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>Trocar de empresa</Menu.Label>
+                {me.empresas.map((e) => (
+                  <Menu.Item
+                    key={e.id}
+                    onClick={() => trocar(e.id)}
+                    rightSection={e.id === me.empresaId ? <IconCheck size={15} color="var(--mantine-color-teal-7)" /> : null}
+                  >
+                    <Text size="sm" lineClamp={1}>
+                      {nomeEmpresa(e)}
                     </Text>
-                    <Badge size="xs" variant="light">
-                      {PERFIS[me.perfil]}
-                    </Badge>
-                  </div>
-                  <IconChevronDown size={16} />
-                </Group>
+                    <Text size="xs" c="dimmed">
+                      {PERFIS[e.perfil]}
+                    </Text>
+                  </Menu.Item>
+                ))}
+              </Menu.Dropdown>
+            </Menu>
+          ) : (
+            <div className={css.bloco} data-estatico>
+              <div style={{ flex: 1, minWidth: 0 }}>{empresa}</div>
+            </div>
+          )}
+        </AppShell.Section>
+
+        <AppShell.Section grow component={ScrollArea} type="scroll" mx={-4} px={4}>
+          <nav aria-label="Menu principal">
+            {MENU.map(({ grupo, itens }) => {
+              const visiveis = itens.filter((i) => !i.permissao || pode(i.permissao));
+              if (visiveis.length === 0) return null;
+              return (
+                <div key={grupo ?? 'inicio'}>
+                  {grupo ? <div className={css.grupo}>{grupo}</div> : <div style={{ height: 10 }} />}
+                  {visiveis.map((item) => {
+                    const ativo = item.rota === '/' ? local.pathname === '/' : local.pathname.startsWith(item.rota);
+                    return (
+                      <RouterLink
+                        key={item.rota}
+                        to={item.rota}
+                        className={css.item}
+                        data-active={ativo || undefined}
+                        aria-current={ativo ? 'page' : undefined}
+                        onClick={close}
+                      >
+                        <item.icone size={17} stroke={1.6} />
+                        {item.rotulo}
+                      </RouterLink>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </nav>
+        </AppShell.Section>
+
+        <AppShell.Section pt="sm">
+          <Menu position="top-start" width="target">
+            <Menu.Target>
+              <UnstyledButton className={css.bloco} aria-label="Menu do usuário">
+                <Avatar size={30} radius="xl" color="teal" variant="light">
+                  {iniciais(me.usuario.nome)}
+                </Avatar>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text size="sm" fw={500} lineClamp={1} lh={1.3}>
+                    {me.usuario.nome}
+                  </Text>
+                  <Text size="xs" c="dimmed" lh={1.3}>
+                    {PERFIS[me.perfil]}
+                  </Text>
+                </div>
+                <IconSelector size={16} color="var(--mantine-color-gray-5)" />
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
@@ -163,41 +265,13 @@ export function Layout() {
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
-        </Group>
-      </AppShell.Header>
-
-      <AppShell.Navbar p="sm">
-        <AppShell.Section grow component={ScrollArea}>
-          {MENU.map(({ grupo, itens }) => {
-            const visiveis = itens.filter((i) => !i.permissao || pode(i.permissao));
-            if (visiveis.length === 0) return null;
-            return (
-              <div key={grupo ?? 'inicio'}>
-                {grupo && (
-                  <Text size="xs" fw={600} c="dimmed" tt="uppercase" px="sm" mt="sm" mb={2}>
-                    {grupo}
-                  </Text>
-                )}
-                {visiveis.map((item) => (
-                  <NavLink
-                    key={item.rota}
-                    component={RouterLink}
-                    to={item.rota}
-                    label={item.rotulo}
-                    py={6}
-                    leftSection={<item.icone size={18} />}
-                    active={item.rota === '/' ? local.pathname === '/' : local.pathname.startsWith(item.rota)}
-                    onClick={close}
-                  />
-                ))}
-              </div>
-            );
-          })}
         </AppShell.Section>
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Outlet />
+        <div className={css.folha}>
+          <Outlet />
+        </div>
       </AppShell.Main>
       <Modal opened={trocandoSenha} onClose={() => setTrocandoSenha(false)} title="Alterar senha">
         {trocandoSenha && <AlterarSenha aoFechar={() => setTrocandoSenha(false)} />}

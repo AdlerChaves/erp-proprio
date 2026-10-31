@@ -50,6 +50,7 @@ React 19, Vite, TypeScript, Mantine (componentes e datas), TanStack Query e Reac
 - Administração: dados da empresa (inclusive contato, endereço, logo e configuração do orçamento em PDF, e o número a partir do qual orçamentos e vendas são numerados) e criação de outras empresas; usuários e perfis; auditoria com filtros e os dados de cada registro (só `ADMIN`).
 - Menus e botões aparecem conforme o perfil, e as telas fora do perfil mostram um aviso; quem decide de fato é a API.
 - Datas são digitadas e exibidas como dd/mm/aaaa; valores, em reais.
+- Visual: tema em `web/src/tema.ts` (verde-petróleo da marca, que substitui a escala `teal` do Mantine, e cinzas quentes), fonte IBM Plex Sans embutida (`@fontsource-variable/ibm-plex-sans`, sem depender de fonte externa) e ajustes finos dos componentes em `web/src/estilos.css`. Menu lateral com a empresa e o usuário; o conteúdo fica numa folha branca sobre o fundo neutro.
 - `npm run typecheck`, `npm test` (Vitest) e `npm run build` dentro de `web/`.
 
 ### Sessão no navegador

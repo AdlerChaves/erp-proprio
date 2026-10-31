@@ -1,0 +1,81 @@
+.tela {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(380px, 5fr) 7fr;
+  background: var(--mantine-color-white);
+}
+
+/* Painel da marca, à esquerda: verde-petróleo profundo com um brilho suave no canto. */
+.marca {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px 48px;
+  color: var(--mantine-color-teal-0);
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(95, 166, 154, 0.28), transparent 60%),
+    linear-gradient(160deg, var(--mantine-color-teal-8), var(--mantine-color-teal-9) 70%);
+}
+.marca::after {
+  /* Linhas finas de grade, como papel de escrituração. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 100% 28px;
+  mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+  pointer-events: none;
+}
+.marca > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chamada {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--mantine-color-white);
+  max-width: 420px;
+}
+
+.recursos {
+  list-style: none;
+  padding: 0;
+  margin: 28px 0 0;
+  display: grid;
+  gap: 14px;
+}
+.recursos li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(238, 246, 244, 0.82);
+}
+.recursos svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--mantine-color-teal-2);
+}
+
+.formulario {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+@media (max-width: 62em) {
+  .tela {
+    grid-template-columns: 1fr;
+    background: var(--relda-fundo);
+  }
+  .marca {
+    display: none;
+  }
+}

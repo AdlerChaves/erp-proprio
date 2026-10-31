@@ -1,0 +1,140 @@
+/*
+ * Ajustes finos sobre os componentes do Mantine, pelas classes estáticas deles (.mantine-Componente-parte).
+ * Cores e tamanhos vêm do tema (tema.ts); aqui fica o que o tema não alcança.
+ */
+
+body {
+  background: var(--relda-fundo);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--mantine-color-teal-1);
+}
+
+/* Títulos um pouco mais fechados, como em material impresso. */
+h1, h2, h3, .mantine-Title-root {
+  letter-spacing: -0.012em;
+}
+
+/* Valores em colunas: algarismos de mesma largura e sem quebrar o sinal do valor. */
+.mantine-Table-table {
+  font-variant-numeric: tabular-nums;
+}
+.mantine-Table-td[style*='text-align: right'],
+.mantine-Table-th[style*='text-align: right'] {
+  white-space: nowrap;
+}
+
+/* Cabeçalho de tabela discreto: rótulos pequenos em cinza sobre o fundo neutro. */
+.mantine-Table-thead .mantine-Table-th {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mantine-color-gray-6);
+  background: var(--relda-fundo);
+  border-bottom: 1px solid var(--relda-borda);
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.mantine-Table-tr {
+  border-color: var(--relda-borda);
+}
+.mantine-Table-tfoot .mantine-Table-th,
+.mantine-Table-tfoot .mantine-Table-td {
+  background: var(--relda-fundo);
+  border-top: 1px solid var(--relda-borda);
+}
+.mantine-Table-table[data-hover] .mantine-Table-tbody .mantine-Table-tr:hover {
+  background: var(--mantine-color-gray-0);
+}
+
+/* Selos de situação: texto normal (sem caixa alta), com um ponto na cor da situação. */
+.mantine-Badge-root {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+  font-size: 12px;
+  height: 22px;
+  padding-inline: 8px;
+}
+.mantine-Badge-root[data-variant='light'] .mantine-Badge-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+/* Cartões e blocos: borda suave, sem sombra. */
+.mantine-Card-root,
+.mantine-Paper-root[data-with-border] {
+  border-color: var(--relda-borda);
+}
+
+/* Botões e campos. */
+.mantine-Button-root {
+  font-weight: 500;
+}
+.mantine-Button-root[data-variant='default'] {
+  border-color: var(--mantine-color-gray-3);
+}
+.mantine-InputWrapper-label {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--mantine-color-gray-8);
+  margin-bottom: 4px;
+}
+.mantine-InputWrapper-description {
+  font-size: 12px;
+}
+.mantine-Input-input:focus,
+.mantine-Input-input:focus-within {
+  border-color: var(--mantine-color-teal-6);
+  box-shadow: 0 0 0 3px var(--mantine-color-teal-0);
+}
+
+/* Abas: rótulo em peso médio, a ativa em preto com o sublinhado da marca. */
+.mantine-Tabs-tab {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--mantine-color-gray-6);
+}
+.mantine-Tabs-tab[data-active] {
+  color: var(--mantine-color-black);
+}
+.mantine-Tabs-list::before {
+  border-color: var(--relda-borda);
+}
+
+/* Janelas e gavetas. */
+.mantine-Modal-title,
+.mantine-Drawer-title {
+  font-weight: 600;
+  font-size: 16.5px;
+}
+.mantine-Modal-header {
+  border-bottom: 1px solid var(--relda-borda);
+  margin-bottom: var(--mantine-spacing-md);
+}
+
+/* Avisos em toast. */
+.mantine-Notification-root {
+  border: 1px solid var(--relda-borda);
+  box-shadow: var(--mantine-shadow-lg);
+}
+
+.mantine-Menu-dropdown {
+  border-color: var(--relda-borda);
+}
+.mantine-Menu-item {
+  font-size: 13.5px;
+}
+
+.mantine-SegmentedControl-root {
+  background: var(--mantine-color-gray-1);
+}

@@ -1,30 +1,54 @@
-import { Anchor, Box, Button, Center, Paper, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Box, Button, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { IconArrowsExchange, IconChartBar, IconFileInvoice } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { EmpresaAcessivel } from '../api/tipos';
 import { avisarErro } from '../componentes/comum';
+import { Marca } from '../layout/Layout';
 import { useSessao } from '../sessao/sessao';
 import { digitos } from '../util/formato';
+import css from './Entrada.module.css';
 
 function Moldura({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: ReactNode }) {
   return (
-    <Center mih="100vh" bg="gray.0" p="md">
-      <Box w="100%" maw={420}>
-        <Title order={2} ta="center" c="teal.7">
+    <div className={css.tela}>
+      <aside className={css.marca}>
+        <Marca claro />
+        <div>
+          <div className={css.chamada}>A rotina financeira da sua empresa, em ordem.</div>
+          <ul className={css.recursos}>
+            <li>
+              <IconFileInvoice size={18} stroke={1.6} />
+              Vendas, orçamentos e notas fiscais de serviço emitidas no Emissor Nacional
+            </li>
+            <li>
+              <IconArrowsExchange size={18} stroke={1.6} />
+              Contas a pagar e a receber, cartões e conciliação com o extrato do banco
+            </li>
+            <li>
+              <IconChartBar size={18} stroke={1.6} />
+              Fluxo de caixa projetado e DRE por centro de custo
+            </li>
+          </ul>
+        </div>
+        <Text size="xs" c="teal.2">
           Relda ERP
-        </Title>
-        <Text ta="center" c="dimmed" mb="lg">
-          {subtitulo}
         </Text>
-        <Paper withBorder shadow="sm" p="xl">
-          <Title order={4} mb="md">
-            {titulo}
-          </Title>
+      </aside>
+      <main className={css.formulario}>
+        <Box w="100%" maw={380}>
+          <Box hiddenFrom="md" mb="xl">
+            <Marca />
+          </Box>
+          <Title order={2}>{titulo}</Title>
+          <Text c="dimmed" size="sm" mt={4} mb="xl">
+            {subtitulo}
+          </Text>
           {children}
-        </Paper>
-      </Box>
-    </Center>
+        </Box>
+      </main>
+    </div>
   );
 }
 
@@ -56,7 +80,7 @@ export function Login() {
   });
 
   return (
-    <Moldura titulo="Entrar" subtitulo="Gestão financeira da sua empresa">
+    <Moldura titulo="Entrar" subtitulo="Use o e-mail e a senha do seu acesso">
       <form onSubmit={enviar}>
         <Stack>
           <TextInput label="E-mail" type="email" autoComplete="username" {...form.getInputProps('email')} />
