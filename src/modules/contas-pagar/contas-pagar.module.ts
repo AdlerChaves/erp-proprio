@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AnexosModule } from '../anexos/anexos.module';
 import { CentrosCustoModule } from '../centros-custo/centros-custo.module';
 import { ContasBancariasModule } from '../contas-bancarias/contas-bancarias.module';
 import { FornecedoresModule } from '../fornecedores/fornecedores.module';
@@ -17,6 +18,7 @@ import { ContasPagarService } from './contas-pagar.service';
     CentrosCustoModule,
     ContasBancariasModule,
     MovimentacoesModule,
+    AnexosModule,
   ],
   controllers: [ContasPagarController],
   providers: [ContasPagarService],

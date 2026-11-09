@@ -16,13 +16,16 @@ import {
   Table,
   Text,
   TextInput,
+  Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconDots, IconPlus } from '@tabler/icons-react';
+import { IconDots, IconPaperclip, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { CentroCusto, ContaBancaria, ContaFinanceira, Pessoa, PlanoConta, StatusConta, TipoPlanoConta } from '../api/tipos';
+import { Anexos } from '../componentes/Anexos';
 import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, ErroCarregamento } from '../componentes/comum';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda, STATUS_CONTA, vencida } from '../util/formato';
@@ -372,6 +375,8 @@ function Detalhe({ config, conta, aoFechar }: { config: ConfigContas; conta: Con
           </Table.Tbody>
         </Table>
       )}
+      <Divider label="Anexos" labelPosition="left" />
+      <Anexos rotaBase={config.rota} contaId={conta.id} />
       <Confirmacao
         aberta={estornando !== null}
         titulo="Estornar pagamento"
@@ -479,9 +484,21 @@ export function Contas({ config }: { config: ConfigContas }) {
                         {data(c.dataVencimento)}
                       </Table.Td>
                       <Table.Td>
-                        <Text size="sm" style={{ cursor: 'pointer' }} onClick={() => setDetalhe(c)} td="underline" c="teal.8">
-                          {c.descricao}
-                        </Text>
+                        <Group gap={6} wrap="nowrap">
+                          <Text size="sm" style={{ cursor: 'pointer' }} onClick={() => setDetalhe(c)} td="underline" c="teal.8">
+                            {c.descricao}
+                          </Text>
+                          {!!c.quantidadeAnexos && (
+                            <Tooltip label={c.quantidadeAnexos === 1 ? '1 arquivo anexado' : `${c.quantidadeAnexos} arquivos anexados`}>
+                              <UnstyledButton onClick={() => setDetalhe(c)} aria-label={`Ver ${c.quantidadeAnexos} anexo(s) de ${c.descricao}`}>
+                                <Group gap={2} wrap="nowrap" c="dimmed">
+                                  <IconPaperclip size={14} />
+                                  <Text size="xs">{c.quantidadeAnexos}</Text>
+                                </Group>
+                              </UnstyledButton>
+                            </Tooltip>
+                          )}
+                        </Group>
                         {c.faturaCartaoId && (
                           <Badge size="xs" variant="outline" color="grape">
                             Cartão

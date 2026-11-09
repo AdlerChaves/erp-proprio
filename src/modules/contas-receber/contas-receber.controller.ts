@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Perfis, SessaoAtual } from '../auth/auth.decorators';
 import { Sessao } from '../auth/sessao';
+import { AnexosService } from '../anexos/anexos.service';
 import { BaixaDto } from '../financeiro/dto/baixa.dto';
 import { UpdateContaDto } from '../financeiro/dto/dados-conta.dto';
 import { Perfil } from '../usuarios/perfil.enum';
@@ -13,11 +14,16 @@ import { FiltroContaReceberDto } from './dto/filtro-conta-receber.dto';
 @ApiBearerAuth()
 @Controller('contas-receber')
 export class ContasReceberController {
-  constructor(private readonly service: ContasReceberService) {}
+  constructor(
+    private readonly service: ContasReceberService,
+    private readonly anexos: AnexosService,
+  ) {}
 
   @Get()
-  findAll(@SessaoAtual() sessao: Sessao, @Query() filtro: FiltroContaReceberDto) {
-    return this.service.findAll(sessao.empresaId, filtro);
+  async findAll(@SessaoAtual() sessao: Sessao, @Query() filtro: FiltroContaReceberDto) {
+    const contas = await this.service.findAll(sessao.empresaId, filtro);
+    const anexos = await this.anexos.contar(sessao.empresaId, 'receber', contas.map((c) => c.id));
+    return contas.map((c) => ({ ...c, quantidadeAnexos: anexos.get(c.id) ?? 0 }));
   }
 
   @Get(':id')

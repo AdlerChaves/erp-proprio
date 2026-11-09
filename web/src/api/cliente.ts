@@ -38,13 +38,15 @@ function mensagemDeErro(status: number, corpo: unknown) {
 
 export async function requisitar<T>(metodo: string, rota: string, corpo?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Sessao': 'cookie' };
-  if (corpo !== undefined) headers['Content-Type'] = 'application/json';
+  // FormData (upload) vai sem Content-Type: o navegador o monta com o "boundary" do multipart.
+  const multipart = corpo instanceof FormData;
+  if (corpo !== undefined && !multipart) headers['Content-Type'] = 'application/json';
   if (!METODOS_SEGUROS.has(metodo) && csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
   const resposta = await fetch(`/api${rota}`, {
     method: metodo,
     headers,
-    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+    body: corpo === undefined ? undefined : multipart ? corpo : JSON.stringify(corpo),
     credentials: 'same-origin',
   });
   if (resposta.status === 204) return undefined as T;
@@ -57,21 +59,67 @@ export async function requisitar<T>(metodo: string, rota: string, corpo?: unknow
   return dados as T;
 }
 
-/** Baixa um arquivo da API (ex.: XML da DPS) com o nome sugerido pelo servidor. */
-export async function baixarArquivo(rota: string, nomePadrao: string) {
+/** Envia um arquivo no campo "arquivo" (multipart), como a API de anexos espera. */
+export function enviarArquivo<T>(rota: string, arquivo: File) {
+  const formulario = new FormData();
+  formulario.append('arquivo', arquivo);
+  return requisitar<T>('POST', rota, formulario);
+}
+
+/** Nome sugerido pelo servidor: o filename* (UTF-8, com acentos) tem prioridade sobre o filename comum. */
+export function nomeDoDownload(contentDisposition: string | null, nomePadrao: string) {
+  const utf8 = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8);
+    } catch {
+      // Codificação inválida: segue para o filename comum.
+    }
+  }
+  return contentDisposition?.match(/filename="([^"]+)"/)?.[1] ?? nomePadrao;
+}
+
+async function buscarArquivo(rota: string, nomePadrao: string) {
   const resposta = await fetch(`/api${rota}`, { headers: { 'X-Sessao': 'cookie' }, credentials: 'same-origin' });
   if (!resposta.ok) {
     const dados: unknown = await resposta.json().catch(() => null);
     if (resposta.status === 401) aoExpirar();
     throw new ApiError(resposta.status, mensagemDeErro(resposta.status, dados), dados);
   }
-  const nome = resposta.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? nomePadrao;
-  const url = URL.createObjectURL(await resposta.blob());
+  return { nome: nomeDoDownload(resposta.headers.get('Content-Disposition'), nomePadrao), blob: await resposta.blob() };
+}
+
+/** Baixa um arquivo da API (ex.: XML da DPS) com o nome sugerido pelo servidor. */
+export async function baixarArquivo(rota: string, nomePadrao: string) {
+  const { nome, blob } = await buscarArquivo(rota, nomePadrao);
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = nome;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Abre um PDF ou imagem da API numa aba nova. A aba é aberta antes do download para o navegador
+ * não tratá-la como pop-up; se o download falhar, ela é fechada.
+ */
+export async function abrirArquivo(rota: string) {
+  const aba = window.open('', '_blank');
+  try {
+    const { blob } = await buscarArquivo(rota, 'arquivo');
+    const url = URL.createObjectURL(blob);
+    if (aba) {
+      aba.opener = null;
+      aba.location.href = url;
+    }
+    else window.location.assign(url);
+    // Dá tempo de a aba carregar antes de liberar a memória.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (erro) {
+    aba?.close();
+    throw erro;
+  }
 }
 
 export const api = {

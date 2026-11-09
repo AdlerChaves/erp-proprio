@@ -118,6 +118,18 @@ export interface ContaFinanceira {
   despesaRecorrenteId?: string | null;
   /** Lançada com valor previsto: corrija o valor quando a conta de verdade chegar. */
   estimada?: boolean;
+  /** Boletos, notas e comprovantes anexados (vem só na listagem). */
+  quantidadeAnexos?: number;
+}
+
+/** Arquivo anexado a uma conta a pagar ou a receber. */
+export interface Anexo {
+  id: string;
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  criadoEm: string;
+  enviadoPor: { id: string; nome: string } | null;
 }
 
 export interface Saldos {
