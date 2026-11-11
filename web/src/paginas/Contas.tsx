@@ -22,7 +22,8 @@ import {
 import { useForm } from '@mantine/form';
 import { IconDots, IconPaperclip, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, consulta } from '../api/cliente';
 import type { CentroCusto, ContaBancaria, ContaFinanceira, Pessoa, PlanoConta, StatusConta, TipoPlanoConta } from '../api/tipos';
 import { Anexos } from '../componentes/Anexos';
@@ -400,6 +401,19 @@ export function Contas({ config }: { config: ConfigContas }) {
   const [de, setDe] = useState<string | null>(null);
   const [ate, setAte] = useState<string | null>(null);
   const [editando, setEditando] = useState<ContaFinanceira | 'nova' | null>(null);
+  // "?nova=1" (botões "Nova conta" do painel) abre o formulário assim que a tela carrega.
+  const [parametros, setParametros] = useSearchParams();
+  useEffect(() => {
+    if (parametros.get('nova') !== '1') return;
+    if (pode('escreverFinanceiro')) setEditando('nova');
+    setParametros(
+      (p) => {
+        p.delete('nova');
+        return p;
+      },
+      { replace: true },
+    );
+  }, [parametros, setParametros, pode]);
   const [baixando, setBaixando] = useState<ContaFinanceira | null>(null);
   const [detalhe, setDetalhe] = useState<ContaFinanceira | null>(null);
   const [cancelando, setCancelando] = useState<ContaFinanceira | null>(null);

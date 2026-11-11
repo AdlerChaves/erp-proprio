@@ -1,78 +1,112 @@
+/* Menu sobre o fundo neutro; o conteúdo ocupa a área de trabalho em branco, sem moldura em volta. */
 .navbar {
   background: var(--relda-fundo);
-  border-right: none;
+  border-right: 1px solid var(--relda-borda);
 }
 
 .main {
-  background: var(--relda-fundo);
+  background: var(--mantine-color-white);
+  min-height: 100dvh;
 }
 
-/* O conteúdo de cada tela fica numa folha branca, separada do menu pelo fundo neutro. */
-.folha {
-  background: var(--mantine-color-white);
-  border: 1px solid var(--relda-borda);
-  border-radius: var(--mantine-radius-lg);
-  min-height: calc(100dvh - 2 * var(--mantine-spacing-sm));
-  padding: var(--mantine-spacing-xl) calc(var(--mantine-spacing-xl) + 4px);
-  box-shadow: var(--mantine-shadow-xs);
+/* Margens do conteúdo; o cabeçalho de cada tela (Cabecalho) as usa para ocupar a largura toda. */
+.conteudo {
+  --relda-margem: 28px;
+  --relda-topo: 20px;
+  padding: var(--relda-topo) var(--relda-margem) 32px;
+  max-width: 1600px;
 }
 
 @media (max-width: 48em) {
-  .folha {
-    border-radius: var(--mantine-radius-md);
-    padding: var(--mantine-spacing-md);
-    min-height: calc(100dvh - 56px - 2 * var(--mantine-spacing-sm));
+  .conteudo {
+    --relda-margem: 16px;
+    --relda-topo: 16px;
   }
 }
 
 .selo {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(145deg, var(--mantine-color-teal-6), var(--mantine-color-teal-9));
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--mantine-color-teal-7);
   color: var(--mantine-color-white);
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: -0.02em;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(14, 65, 58, 0.3);
 }
 .selo[data-claro] {
   background: rgba(255, 255, 255, 0.12);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
-/* Bloco da empresa e do usuário: cartão clicável. */
+/* Empresa e usuário: blocos clicáveis discretos, sem cartão. */
 .bloco {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--mantine-radius-md);
-  border: 1px solid var(--relda-borda);
-  background: var(--mantine-color-white);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  padding: 7px 10px;
+  border-radius: var(--mantine-radius-sm);
+  transition: background-color 100ms ease;
 }
 .bloco:hover {
-  border-color: var(--mantine-color-gray-3);
-  box-shadow: var(--mantine-shadow-xs);
+  background: var(--mantine-color-gray-1);
 }
 .bloco[data-estatico] {
   cursor: default;
 }
 .bloco[data-estatico]:hover {
-  border-color: var(--relda-borda);
-  box-shadow: none;
+  background: none;
+}
+
+.busca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--relda-borda);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-white);
+  color: var(--mantine-color-gray-5);
+  font-size: 13px;
+  transition: border-color 100ms ease;
+}
+.busca:hover {
+  border-color: var(--relda-borda-forte);
+}
+.busca kbd {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--mantine-color-gray-5);
+  border: 1px solid var(--relda-borda);
+  border-radius: 4px;
+  padding: 0 5px;
 }
 
 .grupo {
-  font-size: 11.5px;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 12px;
   color: var(--mantine-color-gray-5);
-  padding: 0 10px;
-  margin: 14px 0 3px;
+  padding: 4px 10px;
+  margin-top: 12px;
+  border-radius: var(--mantine-radius-sm);
+}
+.grupo:hover {
+  color: var(--mantine-color-gray-7);
+}
+.grupo svg {
+  transition: transform 120ms ease;
+}
+.grupo[data-recolhido] svg {
+  transform: rotate(-90deg);
 }
 
 .item {
@@ -83,13 +117,12 @@
   padding: 0 10px;
   border-radius: var(--mantine-radius-sm);
   font-size: 13.5px;
-  color: var(--mantine-color-gray-8);
+  color: var(--mantine-color-gray-7);
   text-decoration: none;
-  border: 1px solid transparent;
   transition: background-color 100ms ease, color 100ms ease;
 }
 .item svg {
-  color: var(--mantine-color-gray-6);
+  color: var(--mantine-color-gray-5);
   flex-shrink: 0;
 }
 .item:hover {
@@ -97,12 +130,38 @@
   color: var(--mantine-color-black);
 }
 .item[data-active] {
-  background: var(--mantine-color-white);
-  border-color: var(--relda-borda);
-  box-shadow: var(--mantine-shadow-xs);
-  color: var(--mantine-color-black);
+  background: var(--mantine-color-teal-0);
+  color: var(--mantine-color-teal-8);
   font-weight: 500;
 }
 .item[data-active] svg {
   color: var(--mantine-color-teal-7);
+}
+.item:focus-visible,
+.grupo:focus-visible,
+.busca:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-6);
+  outline-offset: 1px;
+}
+
+/* Contador de contas vencidas ao lado do item. */
+.contador {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--relda-critico);
+  font-variant-numeric: tabular-nums;
+}
+
+.rodape {
+  border-top: 1px solid var(--relda-borda);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grupo svg,
+  .item,
+  .bloco,
+  .busca {
+    transition: none;
+  }
 }

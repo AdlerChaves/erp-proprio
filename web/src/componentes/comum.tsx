@@ -2,22 +2,95 @@ import { ActionIcon, Alert, Badge, Button, Group, Menu, Modal, NumberInput, type
 import { DateInput, type DateInputProps } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconDots, IconLock } from '@tabler/icons-react';
-import type { ReactNode } from 'react';
-import { lerDataBR } from '../util/formato';
+import type { CSSProperties, ReactNode } from 'react';
+import { lerDataBR, moeda } from '../util/formato';
+import css from './comum.module.css';
 
-export function Cabecalho({ titulo, descricao, acoes }: { titulo: string; descricao?: string; acoes?: ReactNode }) {
+/** Barra do topo de cada tela: título, contexto em uma linha e as ações. Fica presa ao topo enquanto a página rola. */
+export function Cabecalho({ titulo, descricao, acoes }: { titulo: string; descricao?: ReactNode; acoes?: ReactNode }) {
   return (
-    <Group justify="space-between" align="flex-end" mb="lg" wrap="wrap" gap="md">
-      <div>
-        <Title order={2}>{titulo}</Title>
+    <header className={css.cabecalho}>
+      <div className={css.cabecalhoTexto}>
+        <Title order={1}>{titulo}</Title>
         {descricao && (
           <Text c="dimmed" size="sm" mt={2}>
             {descricao}
           </Text>
         )}
       </div>
-      {acoes && <Group gap="sm">{acoes}</Group>}
-    </Group>
+      {acoes && <div className={css.cabecalhoAcoes}>{acoes}</div>}
+    </header>
+  );
+}
+
+/**
+ * Valor em reais com algarismos de mesma largura. Negativo fica vermelho, a não ser que `neutro` diga que o sinal
+ * não é um problema (ex.: uma saída numa coluna de saídas).
+ */
+export function Valor({ valor, forte, neutro }: { valor: number; forte?: boolean; neutro?: boolean }) {
+  return (
+    <Text component="span" inherit className="relda-valor" fw={forte ? 600 : undefined} c={valor < 0 && !neutro ? 'red.9' : undefined}>
+      {moeda(valor)}
+    </Text>
+  );
+}
+
+/** Faixa de números do topo de uma tela, com divisórias entre eles. */
+export function FaixaMetricas({ children, colunas = 4 }: { children: ReactNode; colunas?: number }) {
+  return (
+    <div className={css.faixa} style={{ '--colunas': colunas } as CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
+export function Metrica({ rotulo, valor, selo, detalhe }: { rotulo: string; valor: ReactNode; selo?: ReactNode; detalhe?: ReactNode }) {
+  return (
+    <div className={css.metrica}>
+      <span className={css.metricaRotulo}>
+        {rotulo}
+        {selo}
+      </span>
+      <span className={css.metricaValor}>{valor}</span>
+      <span className={css.metricaDetalhe}>{detalhe ?? ' '}</span>
+    </div>
+  );
+}
+
+/** Bloco da tela com título e uma ação à direita. Sem `respiro`, o conteúdo (tabela, lista) encosta nas bordas. */
+export function Secao({ titulo, acao, respiro, children }: { titulo: ReactNode; acao?: ReactNode; respiro?: boolean; children: ReactNode }) {
+  return (
+    <section className={css.secao}>
+      <div className={css.secaoCabecalho}>
+        <Title order={4}>{titulo}</Title>
+        {acao}
+      </div>
+      <div className={css.secaoCorpo} data-respiro={respiro || undefined}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** Subtítulo dentro de uma Seção, para dividir o conteúdo (ex.: "Em atraso" abaixo dos próximos vencimentos). */
+export function SubSecao({ titulo, acao }: { titulo: ReactNode; acao?: ReactNode }) {
+  return (
+    <div className={css.secaoCabecalho} style={{ borderTop: '1px solid var(--relda-borda)' }}>
+      <Title order={5}>{titulo}</Title>
+      {acao}
+    </div>
+  );
+}
+
+/** Quando não há o que mostrar: explica o porquê e oferece o próximo passo. */
+export function EstadoVazio({ mensagem, acao }: { mensagem: ReactNode; acao?: ReactNode }) {
+  return (
+    <div className={css.vazio}>
+      <Text size="sm" c="dimmed" maw={360}>
+        {mensagem}
+      </Text>
+      {acao}
+    </div>
   );
 }
 
@@ -44,10 +117,17 @@ export function CampoData(props: DateInputProps) {
   return <DateInput valueFormat="DD/MM/YYYY" placeholder="dd/mm/aaaa" dateParser={lerDataBR} {...props} />;
 }
 
-export function ErroCarregamento({ erro }: { erro: unknown }) {
+export function ErroCarregamento({ erro, aoTentarDeNovo }: { erro: unknown; aoTentarDeNovo?: () => void }) {
   return (
     <Alert color="red" icon={<IconAlertCircle size={18} />} title="Não foi possível carregar">
-      {(erro as Error)?.message}
+      <Stack gap="xs" align="flex-start">
+        <span>{(erro as Error)?.message}</span>
+        {aoTentarDeNovo && (
+          <Button size="xs" variant="default" onClick={aoTentarDeNovo}>
+            Tentar de novo
+          </Button>
+        )}
+      </Stack>
     </Alert>
   );
 }
