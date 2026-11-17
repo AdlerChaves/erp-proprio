@@ -1,15 +1,16 @@
-import { Button, Card, FileButton, Group, Image, Loader, Modal, Paper, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { Button, FileButton, Group, Image, Loader, Modal, Paper, SegmentedControl, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconPhoto, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconPhoto, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { api } from '../api/cliente';
 import type { Produto, TipoProduto } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes, SituacaoAtivo } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, EstadoVazio, MenuAcoes, SituacaoAtivo, Valor } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { CampoServicoNacional } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
 import { lerComoDataUrl, TAMANHO_MAXIMO_IMAGEM } from '../util/arquivo';
-import { digitos, moeda } from '../util/formato';
+import { digitos } from '../util/formato';
 
 const TIPOS: { value: TipoProduto; label: string }[] = [
   { value: 'PRODUTO', label: 'Produto' },
@@ -194,20 +195,12 @@ function FormProduto({ produto, aoFechar }: { produto: Produto | null; aoFechar:
 export function Produtos() {
   const { pode } = useSessao();
   const queryClient = useQueryClient();
-  const [busca, setBusca] = useState('');
   const [tipo, setTipo] = useState<'TODOS' | TipoProduto>('TODOS');
   const [editando, setEditando] = useState<Produto | 'novo' | null>(null);
   const [removendo, setRemovendo] = useState<Produto | null>(null);
   const lista = useQuery({ queryKey: ['/produtos'], queryFn: () => api.get<Produto[]>('/produtos') });
 
-  const filtrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return (lista.data ?? []).filter(
-      (p) =>
-        (tipo === 'TODOS' || p.tipo === tipo) &&
-        (!termo || p.codigo.toLowerCase().includes(termo) || p.descricao.toLowerCase().includes(termo)),
-    );
-  }, [lista.data, busca, tipo]);
+  const filtrados = useMemo(() => lista.data?.filter((p) => tipo === 'TODOS' || p.tipo === tipo), [lista.data, tipo]);
 
   const remover = useMutation({
     mutationFn: (p: Produto) => api.delete(`/produtos/${p.id}`),
@@ -233,76 +226,92 @@ export function Produtos() {
           )
         }
       />
-      <Card withBorder padding={0}>
-        <Group p="md" wrap="wrap">
-          <TextInput
-            placeholder="Buscar por código ou descrição"
-            leftSection={<IconSearch size={16} />}
-            value={busca}
-            onChange={(e) => setBusca(e.currentTarget.value)}
-            w={{ base: '100%', sm: 320 }}
-          />
+      <TabelaDados<Produto>
+        linhas={filtrados}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(p) => p.id}
+        contagem={['item', 'itens']}
+        placeholderBusca="Buscar código ou descrição"
+        textoBusca={(p) => `${p.codigo} ${p.descricao}`}
+        ordemInicial={{ coluna: 'descricao', direcao: 'asc' }}
+        larguraMinima={760}
+        aoClicarLinha={escrever ? setEditando : undefined}
+        filtros={
           <SegmentedControl
             value={tipo}
             onChange={(v) => setTipo(v as typeof tipo)}
-            data={[{ value: 'TODOS', label: 'Todos' }, { value: 'PRODUTO', label: 'Produtos' }, { value: 'SERVICO', label: 'Serviços' }]}
+            aria-label="Tipo"
+            data={[
+              { value: 'TODOS', label: 'Todos' },
+              { value: 'PRODUTO', label: 'Produtos' },
+              { value: 'SERVICO', label: 'Serviços' },
+            ]}
           />
-        </Group>
-        {lista.isPending ? (
-          <Loader m="md" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : filtrados.length === 0 ? (
-          <Text c="dimmed" p="md">
-            {busca || tipo !== 'TODOS' ? 'Nada encontrado.' : 'Nenhum produto ou serviço cadastrado.'}
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={720}>
-            <Table highlightOnHover verticalSpacing="sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Código</Table.Th>
-                  <Table.Th>Descrição</Table.Th>
-                  <Table.Th>Tipo</Table.Th>
-                  <Table.Th>Unid.</Table.Th>
-                  <Table.Th ta="right">Preço</Table.Th>
-                  <Table.Th ta="right">Custo</Table.Th>
-                  <Table.Th w={110}>Situação</Table.Th>
-                  {escrever && <Table.Th w={48} />}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filtrados.map((p) => (
-                  <Table.Tr key={p.id}>
-                    <Table.Td ff="monospace">{p.codigo}</Table.Td>
-                    <Table.Td fw={500}>{p.descricao}</Table.Td>
-                    <Table.Td>{p.tipo === 'SERVICO' ? 'Serviço' : 'Produto'}</Table.Td>
-                    <Table.Td>{p.unidade}</Table.Td>
-                    <Table.Td ta="right">{moeda(p.precoVenda)}</Table.Td>
-                    <Table.Td ta="right" c="dimmed">
-                      {p.custo === null ? '—' : moeda(p.custo)}
-                    </Table.Td>
-                    <Table.Td>
-                      <SituacaoAtivo ativo={p.ativo} />
-                    </Table.Td>
-                    {escrever && (
-                      <Table.Td>
-                        <MenuAcoes
-                          rotulo={p.descricao}
-                          itens={[
-                            { texto: 'Editar', aoClicar: () => setEditando(p) },
-                            pode('remover') && { texto: 'Remover', aoClicar: () => setRemovendo(p), perigosa: true },
-                          ]}
-                        />
-                      </Table.Td>
-                    )}
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+        }
+        vazio={
+          <EstadoVazio
+            mensagem={tipo === 'TODOS' ? 'Nenhum produto ou serviço cadastrado.' : `Nenhum ${tipo === 'SERVICO' ? 'serviço' : 'produto'} cadastrado.`}
+            acao={
+              escrever && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setEditando('novo')}>
+                  Novo item
+                </Button>
+              )
+            }
+          />
+        }
+        colunas={[
+          { id: 'codigo', titulo: 'Código', largura: 120, ordenar: (p) => p.codigo, celula: (p) => p.codigo },
+          { id: 'descricao', titulo: 'Descrição', ordenar: (p) => p.descricao, celula: (p) => <Corta>{p.descricao}</Corta> },
+          {
+            id: 'tipo',
+            titulo: 'Tipo',
+            largura: 100,
+            ordenar: (p) => p.tipo,
+            celula: (p) => (p.tipo === 'SERVICO' ? 'Serviço' : 'Produto'),
+          },
+          { id: 'unidade', titulo: 'Unid.', largura: 70, celula: (p) => p.unidade },
+          { id: 'preco', titulo: 'Preço', alinhar: 'right', largura: 130, ordenar: (p) => p.precoVenda, celula: (p) => <Valor valor={p.precoVenda} /> },
+          {
+            id: 'custo',
+            titulo: 'Custo',
+            alinhar: 'right',
+            largura: 130,
+            ordenar: (p) => p.custo,
+            celula: (p) =>
+              p.custo === null ? (
+                <Text size="sm" c="dimmed">
+                  —
+                </Text>
+              ) : (
+                <Text size="sm" c="dimmed" span>
+                  <Valor valor={p.custo} />
+                </Text>
+              ),
+          },
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 110,
+            ordenar: (p) => (p.ativo ? 'Ativo' : 'Inativo'),
+            celula: (p) => <SituacaoAtivo ativo={p.ativo} />,
+          },
+        ]}
+        acoes={
+          escrever
+            ? (p) => (
+                <MenuAcoes
+                  rotulo={p.descricao}
+                  itens={[
+                    { texto: 'Editar', aoClicar: () => setEditando(p) },
+                    pode('remover') && { texto: 'Remover', aoClicar: () => setRemovendo(p), perigosa: true },
+                  ]}
+                />
+              )
+            : undefined
+        }
+      />
       <Modal opened={editando !== null} onClose={() => setEditando(null)} title={editando === 'novo' ? 'Novo item' : 'Editar item'} size="lg">
         {editando !== null && <FormProduto produto={editando === 'novo' ? null : editando} aoFechar={() => setEditando(null)} />}
       </Modal>

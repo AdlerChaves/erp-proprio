@@ -1,0 +1,97 @@
+/* Tabela de dados: uma moldura com a barra de busca e filtros em cima e a tabela encostada nas bordas. */
+.moldura {
+  border: 1px solid var(--relda-borda);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-white);
+  min-width: 0;
+}
+
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--relda-borda);
+}
+.busca {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+.filtros {
+  display: contents;
+}
+.contagem {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--mantine-color-gray-6);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 36em) {
+  .busca {
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .contagem {
+    margin-left: 0;
+  }
+}
+
+/* Cabeçalho que ordena: o rótulo inteiro é o botão; a seta só aparece na coluna ordenada ou ao passar o mouse. */
+.ordenar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.ordenar[data-direita] {
+  flex-direction: row-reverse;
+}
+.ordenar svg {
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.ordenar:hover svg,
+.ordenar:focus-visible svg,
+.ordenar[data-ativo] svg {
+  opacity: 1;
+}
+.ordenar[data-ativo] {
+  color: var(--mantine-color-black);
+}
+.ordenar:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.linhaClicavel {
+  cursor: pointer;
+}
+.linhaClicavel:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-6);
+  outline-offset: -2px;
+}
+
+/* Texto de célula numa linha só; o excedente vira reticências (o texto inteiro fica no title). */
+.corta {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ordenar svg {
+    transition: none;
+  }
+}

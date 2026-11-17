@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Group, Loader, Modal, Select, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { Button, Group, Modal, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,9 +6,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/cliente';
 import type { ContaBancaria, Saldos, TipoContaBancaria } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, EstadoVazio, MenuAcoes, SituacaoAtivo, Valor } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { useSessao } from '../sessao/sessao';
-import { data, digitos, hoje, moeda } from '../util/formato';
+import { data, digitos, hoje } from '../util/formato';
 
 const TIPOS: { value: TipoContaBancaria; label: string }[] = [
   { value: 'CORRENTE', label: 'Conta corrente' },
@@ -131,73 +132,87 @@ export function ContasBancarias() {
           )
         }
       />
-      <Card withBorder padding={0}>
-        {contas.isPending ? (
-          <Loader m="md" />
-        ) : contas.isError ? (
-          <ErroCarregamento erro={contas.error} />
-        ) : contas.data.length === 0 ? (
-          <Text c="dimmed" p="md">
-            Nenhuma conta cadastrada. Cadastre ao menos uma para registrar recebimentos e pagamentos.
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={640}>
-            <Table highlightOnHover verticalSpacing="sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Nome</Table.Th>
-                  <Table.Th>Tipo</Table.Th>
-                  <Table.Th>Banco / agência / conta</Table.Th>
-                  <Table.Th ta="right">Saldo inicial</Table.Th>
-                  {pode('verSaldos') && <Table.Th ta="right">Saldo atual</Table.Th>}
-                  <Table.Th>Situação</Table.Th>
-                  {comAcoes && <Table.Th w={48} />}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {contas.data.map((c) => {
-                  const saldo = saldoDe(c.id);
-                  return (
-                    <Table.Tr key={c.id}>
-                      <Table.Td fw={500}>{c.nome}</Table.Td>
-                      <Table.Td>{rotuloTipo(c.tipo)}</Table.Td>
-                      <Table.Td>{c.tipo === 'CAIXA' ? '—' : `${c.banco} / ${c.agencia} / ${c.numero}`}</Table.Td>
-                      <Table.Td ta="right">
-                        {moeda(c.saldoInicial)}
-                        <Text size="xs" c="dimmed">
-                          em {data(c.dataSaldoInicial)}
-                        </Text>
-                      </Table.Td>
-                      {pode('verSaldos') && (
-                        <Table.Td ta="right" fw={600} c={saldo !== undefined && saldo < 0 ? 'red.7' : undefined}>
-                          {saldo === undefined ? '—' : moeda(saldo)}
-                        </Table.Td>
-                      )}
-                      <Table.Td>
-                        <Badge variant="light" color={c.ativo ? 'teal' : 'gray'}>
-                          {c.ativo ? 'Ativa' : 'Inativa'}
-                        </Badge>
-                      </Table.Td>
-                      {comAcoes && (
-                        <Table.Td>
-                          <MenuAcoes
-                            rotulo={c.nome}
-                            itens={[
-                              pode('verSaldos') && { texto: 'Ver extrato', aoClicar: () => navegar(`/extrato?conta=${c.id}`) },
-                              escrever && { texto: 'Editar', aoClicar: () => setEditando(c) },
-                              pode('remover') && { texto: 'Remover', aoClicar: () => setRemovendo(c), perigosa: true },
-                            ]}
-                          />
-                        </Table.Td>
-                      )}
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+      <TabelaDados<ContaBancaria>
+        linhas={contas.data}
+        erro={contas.error}
+        aoTentarDeNovo={() => contas.refetch()}
+        chave={(c) => c.id}
+        contagem={['conta', 'contas']}
+        larguraMinima={680}
+        aoClicarLinha={escrever ? setEditando : undefined}
+        vazio={
+          <EstadoVazio
+            mensagem="Nenhuma conta cadastrada. Cadastre ao menos uma para registrar recebimentos e pagamentos."
+            acao={
+              escrever && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setEditando('nova')}>
+                  Nova conta
+                </Button>
+              )
+            }
+          />
+        }
+        colunas={[
+          { id: 'nome', titulo: 'Nome', ordenar: (c) => c.nome, celula: (c) => <Corta>{c.nome}</Corta> },
+          { id: 'tipo', titulo: 'Tipo', largura: 140, ordenar: (c) => rotuloTipo(c.tipo), celula: (c) => rotuloTipo(c.tipo) },
+          {
+            id: 'banco',
+            titulo: 'Banco / agência / conta',
+            celula: (c) => (c.tipo === 'CAIXA' ? '—' : <Corta>{`${c.banco} / ${c.agencia} / ${c.numero}`}</Corta>),
+          },
+          {
+            id: 'inicial',
+            titulo: 'Saldo inicial',
+            alinhar: 'right',
+            largura: 150,
+            ordenar: (c) => c.saldoInicial,
+            celula: (c) => (
+              <>
+                <Valor valor={c.saldoInicial} />
+                <Text size="xs" c="dimmed">
+                  em {data(c.dataSaldoInicial)}
+                </Text>
+              </>
+            ),
+          },
+          ...(pode('verSaldos')
+            ? [
+                {
+                  id: 'atual',
+                  titulo: 'Saldo atual',
+                  alinhar: 'right' as const,
+                  largura: 150,
+                  ordenar: (c: ContaBancaria) => saldoDe(c.id),
+                  celula: (c: ContaBancaria) => {
+                    const saldo = saldoDe(c.id);
+                    return saldo === undefined ? '—' : <Valor valor={saldo} forte />;
+                  },
+                },
+              ]
+            : []),
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 110,
+            ordenar: (c) => (c.ativo ? 'Ativa' : 'Inativa'),
+            celula: (c) => <SituacaoAtivo ativo={c.ativo} feminino />,
+          },
+        ]}
+        acoes={
+          comAcoes
+            ? (c) => (
+                <MenuAcoes
+                  rotulo={c.nome}
+                  itens={[
+                    pode('verSaldos') && { texto: 'Ver extrato', aoClicar: () => navegar(`/extrato?conta=${c.id}`) },
+                    escrever && { texto: 'Editar', aoClicar: () => setEditando(c) },
+                    pode('remover') && { texto: 'Remover', aoClicar: () => setRemovendo(c), perigosa: true },
+                  ]}
+                />
+              )
+            : undefined
+        }
+      />
       <Modal opened={editando !== null} onClose={() => setEditando(null)} title={editando === 'nova' ? 'Nova conta' : 'Editar conta'}>
         {editando !== null && <FormConta conta={editando === 'nova' ? null : editando} aoFechar={() => setEditando(null)} />}
       </Modal>

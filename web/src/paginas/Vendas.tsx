@@ -1,11 +1,12 @@
-import { Alert, Badge, Button, Card, Divider, Drawer, Group, List, Loader, Modal, Select, Stack, Table, Tabs, Text } from '@mantine/core';
+import { Alert, Badge, Button, Divider, Drawer, Group, List, Loader, Modal, SegmentedControl, Select, Stack, Table, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertTriangle, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { Pessoa, PosicaoEstoque, StatusVenda, Venda } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoData, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoData, Confirmacao, ErroCarregamento, EstadoVazio, MenuAcoes, Valor } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { BotaoPdf, type ConfigDocumento, ContasGeradas, FormDocumento, TabelaItens } from '../componentes/Documento';
 import { NotasDaVenda } from '../componentes/Fiscal';
 import { useSessao } from '../sessao/sessao';
@@ -237,7 +238,6 @@ export function Vendas() {
   const clientes = useQuery({ queryKey: ['/clientes'], queryFn: () => api.get<Pessoa[]>('/clientes') });
   const filtro = consulta({ status: aba === 'TODAS' ? undefined : aba, clienteId });
   const lista = useQuery({ queryKey: ['/vendas', filtro], queryFn: () => api.get<Venda[]>(`/vendas${filtro}`) });
-  const total = (lista.data ?? []).filter((v) => v.status !== 'CANCELADA').reduce((s, v) => s + Math.round(v.total * 100), 0) / 100;
 
   return (
     <>
@@ -252,88 +252,93 @@ export function Vendas() {
           )
         }
       />
-      <Card withBorder padding={0}>
-        <Tabs value={aba} onChange={(v) => setAba((v as typeof aba) ?? 'TODAS')}>
-          <Tabs.List px="md" pt="xs">
-            {ABAS.map((a) => (
-              <Tabs.Tab key={a.value} value={a.value}>
-                {a.label}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs>
-        <Group p="md">
-          <Select
-            placeholder="Todos os clientes"
-            aria-label="Cliente"
-            data={(clientes.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
-            value={clienteId}
-            onChange={setClienteId}
-            searchable
-            clearable
-            w={{ base: '100%', sm: 320 }}
+      <TabelaDados<Venda>
+        linhas={lista.data}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(v) => v.id}
+        contagem={['venda', 'vendas']}
+        placeholderBusca="Buscar número ou cliente"
+        textoBusca={(v) => `${v.numero} ${v.cliente.nome} ${moeda(v.total)}`}
+        ordemInicial={{ coluna: 'numero', direcao: 'desc' }}
+        larguraMinima={640}
+        aoClicarLinha={(v) => setAberta(v.id)}
+        filtros={
+          <>
+            <SegmentedControl value={aba} onChange={(v) => setAba(v as typeof aba)} data={ABAS} aria-label="Situação" />
+            <Select
+              placeholder="Todos os clientes"
+              aria-label="Cliente"
+              data={(clientes.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+              value={clienteId}
+              onChange={setClienteId}
+              searchable
+              clearable
+              w={240}
+            />
+          </>
+        }
+        vazio={
+          <EstadoVazio
+            mensagem={aba === 'TODAS' && !clienteId ? 'Nenhuma venda ainda.' : 'Nenhuma venda com estes filtros.'}
+            acao={
+              pode('vender') && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setEditando('nova')}>
+                  Nova venda
+                </Button>
+              )
+            }
           />
-        </Group>
-        {lista.isPending ? (
-          <Loader m="md" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : lista.data.length === 0 ? (
-          <Text c="dimmed" p="md">
-            Nenhuma venda encontrada.
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={620}>
-            <Table highlightOnHover verticalSpacing="sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th w={70}>Nº</Table.Th>
-                  <Table.Th w={110}>Data</Table.Th>
-                  <Table.Th>Cliente</Table.Th>
-                  <Table.Th ta="right">Total</Table.Th>
-                  <Table.Th w={120}>Situação</Table.Th>
-                  <Table.Th w={48} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {lista.data.map((v) => (
-                  <Table.Tr key={v.id} style={{ cursor: 'pointer' }} onClick={() => setAberta(v.id)}>
-                    <Table.Td fw={600}>{v.numero}</Table.Td>
-                    <Table.Td>{data(v.dataFaturamento ?? v.dataEmissao)}</Table.Td>
-                    <Table.Td>{v.cliente.nome}</Table.Td>
-                    <Table.Td ta="right" td={v.status === 'CANCELADA' ? 'line-through' : undefined}>
-                      {moeda(v.total)}
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" color={STATUS_VENDA[v.status].cor}>
-                        {STATUS_VENDA[v.status].rotulo}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td onClick={(e) => e.stopPropagation()}>
-                      <MenuAcoes
-                        rotulo={`venda ${v.numero}`}
-                        itens={[
-                          { texto: 'Detalhes', aoClicar: () => setAberta(v.id) },
-                          pode('vender') && v.status === 'PEDIDO' && { texto: 'Faturar', aoClicar: () => setAberta(v.id) },
-                        ]}
-                      />
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-              <Table.Tfoot>
-                <Table.Tr>
-                  <Table.Th colSpan={3}>
-                    {lista.data.length} {lista.data.length === 1 ? 'venda' : 'vendas'} (canceladas fora da soma)
-                  </Table.Th>
-                  <Table.Th ta="right">{moeda(total)}</Table.Th>
-                  <Table.Th colSpan={2} />
-                </Table.Tr>
-              </Table.Tfoot>
-            </Table>
-          </Table.ScrollContainer>
+        }
+        colunas={[
+          { id: 'numero', titulo: 'Nº', largura: 80, ordenar: (v) => v.numero, celula: (v) => <Text fw={600} size="sm">{v.numero}</Text> },
+          {
+            id: 'data',
+            titulo: 'Data',
+            largura: 110,
+            ordenar: (v) => v.dataFaturamento ?? v.dataEmissao,
+            celula: (v) => data(v.dataFaturamento ?? v.dataEmissao),
+          },
+          { id: 'cliente', titulo: 'Cliente', ordenar: (v) => v.cliente.nome, celula: (v) => <Corta>{v.cliente.nome}</Corta> },
+          {
+            id: 'total',
+            titulo: 'Total',
+            alinhar: 'right',
+            largura: 140,
+            ordenar: (v) => v.total,
+            celula: (v) => (
+              <Text size="sm" span td={v.status === 'CANCELADA' ? 'line-through' : undefined}>
+                <Valor valor={v.total} />
+              </Text>
+            ),
+          },
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 120,
+            ordenar: (v) => STATUS_VENDA[v.status].rotulo,
+            celula: (v) => <Badge color={STATUS_VENDA[v.status].cor}>{STATUS_VENDA[v.status].rotulo}</Badge>,
+          },
+        ]}
+        acoes={(v) => (
+          <MenuAcoes
+            rotulo={`venda ${v.numero}`}
+            itens={[
+              { texto: 'Detalhes', aoClicar: () => setAberta(v.id) },
+              pode('vender') && v.status === 'PEDIDO' && { texto: 'Faturar', aoClicar: () => setAberta(v.id) },
+            ]}
+          />
         )}
-      </Card>
+        rodape={(visiveis) => (
+          <>
+            <Table.Th colSpan={3}>Total, sem as canceladas</Table.Th>
+            <Table.Th ta="right">
+              <Valor valor={visiveis.filter((v) => v.status !== 'CANCELADA').reduce((s, v) => s + Math.round(v.total * 100), 0) / 100} />
+            </Table.Th>
+            <Table.Th colSpan={2} />
+          </>
+        )}
+      />
 
       <Drawer opened={aberta !== null} onClose={() => setAberta(null)} title="Detalhes da venda" position="right" size="lg">
         {aberta && <Detalhe id={aberta} aoEditar={setEditando} aoFaturar={setFaturando} />}

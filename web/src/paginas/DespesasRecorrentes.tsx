@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Grid, Group, Loader, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { Alert, Button, Card, Grid, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { MonthPickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { IconInfoCircle, IconPlus } from '@tabler/icons-react';
@@ -7,7 +7,8 @@ import dayjs from 'dayjs';
 import { useState } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { AjusteDiaUtil, CentroCusto, DespesaRecorrente, Pessoa, PlanoConta, SituacaoDespesa, TipoValorDespesa } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes, SemPermissao } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, EstadoVazio, MenuAcoes, SemPermissao, Valor } from '../componentes/comum';
+import { TabelaDados } from '../componentes/TabelaDados';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, mesAno, moeda } from '../util/formato';
 
@@ -346,112 +347,136 @@ export function DespesasRecorrentes() {
           )
         }
       />
-      <Card withBorder padding={0}>
-        <Group justify="space-between" px="md" pt="xs" wrap="wrap">
-          <Tabs value={situacao} onChange={(v) => setSituacao((v as SituacaoDespesa) ?? 'ATIVA')}>
-            <Tabs.List style={{ borderBottom: 0 }}>
-              {SITUACOES.map((s) => (
-                <Tabs.Tab key={s.value} value={s.value}>
-                  {s.label}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs>
-          {proximos30 > 0 && (
-            <Text size="sm" c="dimmed" py={6}>
-              Próximos 30 dias: <b style={{ color: 'var(--mantine-color-black)' }}>{moeda(proximos30)}</b>
-            </Text>
-          )}
-        </Group>
-        {lista.isPending ? (
-          <Loader m="md" size="sm" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : lista.data.length === 0 ? (
-          <Text c="dimmed" p="md" size="sm">
-            {situacao === 'ATIVA'
-              ? 'Nenhuma despesa recorrente. Cadastre as despesas fixas da empresa (comece por um modelo) para a projeção do caixa mostrar a realidade.'
-              : 'Nenhuma despesa aqui.'}
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={820}>
-            <Table highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Despesa</Table.Th>
-                  <Table.Th w={190} ta="right">
-                    Valor
-                  </Table.Th>
-                  <Table.Th w={170}>Repete</Table.Th>
-                  <Table.Th w={210}>Próximo vencimento</Table.Th>
-                  <Table.Th w={48} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {lista.data.map((d) => {
-                  const valor = descreverValor(d);
-                  const proxima = d.proximas[0];
-                  return (
-                    <Table.Tr key={d.id}>
-                      <Table.Td>
-                        <Text size="sm" fw={500}>
-                          {d.descricao}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {d.fornecedor.nome}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <Text size="sm">{valor.principal}</Text>
-                        {valor.detalhe && (
-                          <Text size="xs" c="dimmed">
-                            {valor.detalhe}
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm">
-                          {NOME_PERIODICIDADE[d.intervaloMeses]}, dia {d.diaVencimento}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {d.fim ? `até ${mesAno(d.fim)}` : 'sem fim'}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        {proxima ? (
-                          <>
-                            <Text size="sm">{dayjs(proxima.vencimento).format('ddd, DD/MM/YYYY')}</Text>
-                            <Text size="xs" c="dimmed">
-                              {proxima.contaId ? 'Já lançada em Contas a pagar' : `Lança a conta em ${data(proxima.lancamento)}`}
-                            </Text>
-                          </>
-                        ) : (
-                          <Text size="sm" c="dimmed">
-                            —
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <MenuAcoes
-                          rotulo={d.descricao}
-                          itens={[
-                            escrever && d.situacao !== 'ENCERRADA' && { texto: 'Editar', aoClicar: () => void editar(d).catch(avisarErro) },
-                            escrever && d.situacao === 'ATIVA' && { texto: 'Lançar a próxima conta agora', aoClicar: () => acao.mutate({ d, rota: 'lancamento' }) },
-                            escrever && d.situacao === 'ATIVA' && { texto: 'Pausar', aoClicar: () => acao.mutate({ d, rota: 'pausa' }) },
-                            escrever && d.situacao === 'PAUSADA' && { texto: 'Reativar', aoClicar: () => acao.mutate({ d, rota: 'reativacao' }) },
-                            escrever && d.situacao !== 'ENCERRADA' && { texto: 'Encerrar', aoClicar: () => setEncerrando(d), perigosa: true },
-                            pode('administrar') && { texto: 'Excluir', aoClicar: () => acao.mutate({ d, rota: 'excluir' }), perigosa: true },
-                          ]}
-                        />
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+      <TabelaDados<DespesaRecorrente>
+        linhas={lista.data}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(d) => d.id}
+        contagem={['despesa', 'despesas']}
+        placeholderBusca="Buscar despesa ou fornecedor"
+        textoBusca={(d) => `${d.descricao} ${d.fornecedor.nome}`}
+        ordemInicial={{ coluna: 'proxima', direcao: 'asc' }}
+        larguraMinima={860}
+        filtros={
+          <>
+            <SegmentedControl value={situacao} onChange={(v) => setSituacao(v as SituacaoDespesa)} data={SITUACOES} aria-label="Situação" />
+            {proximos30 > 0 && (
+              <Text size="sm" c="dimmed">
+                Próximos 30 dias:{' '}
+                <Text span inherit fw={600} c="black">
+                  <Valor valor={proximos30} />
+                </Text>
+              </Text>
+            )}
+          </>
+        }
+        vazio={
+          <EstadoVazio
+            mensagem={
+              situacao === 'ATIVA'
+                ? 'Nenhuma despesa recorrente. Cadastre as despesas fixas da empresa (comece por um modelo) para a projeção do caixa mostrar a realidade.'
+                : 'Nenhuma despesa nesta situação.'
+            }
+            acao={
+              escrever &&
+              situacao === 'ATIVA' && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setFormulario({ despesa: null })}>
+                  Nova despesa
+                </Button>
+              )
+            }
+          />
+        }
+        colunas={[
+          {
+            id: 'despesa',
+            titulo: 'Despesa',
+            ordenar: (d) => d.descricao,
+            celula: (d) => (
+              <>
+                <Text size="sm" fw={500} truncate title={d.descricao}>
+                  {d.descricao}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  {d.fornecedor.nome}
+                </Text>
+              </>
+            ),
+          },
+          {
+            id: 'valor',
+            titulo: 'Valor',
+            alinhar: 'right',
+            largura: 190,
+            ordenar: (d) => d.valor ?? d.percentual,
+            celula: (d) => {
+              const valor = descreverValor(d);
+              return (
+                <>
+                  <Text size="sm" className="relda-valor">
+                    {valor.principal}
+                  </Text>
+                  {valor.detalhe && (
+                    <Text size="xs" c="dimmed">
+                      {valor.detalhe}
+                    </Text>
+                  )}
+                </>
+              );
+            },
+          },
+          {
+            id: 'repete',
+            titulo: 'Repete',
+            largura: 170,
+            ordenar: (d) => d.intervaloMeses * 100 + d.diaVencimento,
+            celula: (d) => (
+              <>
+                <Text size="sm">
+                  {NOME_PERIODICIDADE[d.intervaloMeses]}, dia {d.diaVencimento}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {d.fim ? `até ${mesAno(d.fim)}` : 'sem fim'}
+                </Text>
+              </>
+            ),
+          },
+          {
+            id: 'proxima',
+            titulo: 'Próximo vencimento',
+            largura: 220,
+            ordenar: (d) => d.proximas[0]?.vencimento,
+            celula: (d) => {
+              const proxima = d.proximas[0];
+              return proxima ? (
+                <>
+                  <Text size="sm">{dayjs(proxima.vencimento).format('ddd, DD/MM/YYYY')}</Text>
+                  <Text size="xs" c="dimmed">
+                    {proxima.contaId ? 'Já lançada em Contas a pagar' : `Lança a conta em ${data(proxima.lancamento)}`}
+                  </Text>
+                </>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  —
+                </Text>
+              );
+            },
+          },
+        ]}
+        acoes={(d) => (
+          <MenuAcoes
+            rotulo={d.descricao}
+            itens={[
+              escrever && d.situacao !== 'ENCERRADA' && { texto: 'Editar', aoClicar: () => void editar(d).catch(avisarErro) },
+              escrever && d.situacao === 'ATIVA' && { texto: 'Lançar a próxima conta agora', aoClicar: () => acao.mutate({ d, rota: 'lancamento' }) },
+              escrever && d.situacao === 'ATIVA' && { texto: 'Pausar', aoClicar: () => acao.mutate({ d, rota: 'pausa' }) },
+              escrever && d.situacao === 'PAUSADA' && { texto: 'Reativar', aoClicar: () => acao.mutate({ d, rota: 'reativacao' }) },
+              escrever && d.situacao !== 'ENCERRADA' && { texto: 'Encerrar', aoClicar: () => setEncerrando(d), perigosa: true },
+              pode('administrar') && { texto: 'Excluir', aoClicar: () => acao.mutate({ d, rota: 'excluir' }), perigosa: true },
+            ]}
+          />
         )}
-      </Card>
+      />
       <Text size="xs" c="dimmed">
         <IconInfoCircle size={13} style={{ verticalAlign: -2 }} /> Vencimentos em fim de semana ou feriado bancário nacional são ajustados para o dia útil.
         Feriados estaduais e municipais não entram; ajuste a data na conta, se for o caso. Cancelar uma conta lançada pula aquele mês.

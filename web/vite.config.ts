@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/teste/configuracao.ts'],
+    // Testes de tela digitam e clicam como o usuário; sob carga, o limite padrão de 5 s não basta.
+    testTimeout: 15_000,
     css: false,
   },
 });

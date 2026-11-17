@@ -18,6 +18,10 @@
   background: var(--mantine-color-white);
   border-bottom: 1px solid var(--relda-borda);
 }
+/* Dentro de um Stack, o espaço até o conteúdo já vem do gap do Stack. */
+:global(.mantine-Stack-root) > .cabecalho {
+  margin-bottom: 0;
+}
 .cabecalhoTexto {
   min-width: 0;
 }

@@ -14,8 +14,8 @@ import {
   SimpleGrid,
   Stack,
   Switch,
+  SegmentedControl,
   Table,
-  Tabs,
   Text,
   Textarea,
   TextInput,
@@ -28,7 +28,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, consulta } from '../api/cliente';
 import type { CentroCusto, CobrancaDoMes, Contrato, EstadoCobranca, MesContratos, Pessoa, PlanoConta, Produto, SituacaoContrato } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, MenuAcoes } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoMoeda, Confirmacao, ErroCarregamento, EstadoVazio, MenuAcoes, Valor } from '../componentes/comum';
+import { TabelaDados } from '../componentes/TabelaDados';
 import { CampoQuantidade } from '../componentes/Documento';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, mesAno, moeda, totalItemCentavos } from '../util/formato';
@@ -499,84 +500,84 @@ function ListaContratos({ aoEditar }: { aoEditar: (c: Contrato) => void }) {
   const editar = async (c: Contrato) => aoEditar(await api.get<Contrato>(`/contratos/${c.id}`));
 
   return (
-    <Card withBorder padding={0}>
-      <Tabs value={situacao} onChange={(v) => setSituacao((v as SituacaoContrato) ?? 'ATIVO')}>
-        <Tabs.List px="md" pt="xs">
-          {SITUACOES.map((s) => (
-            <Tabs.Tab key={s.value} value={s.value}>
-              {s.label}
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs>
-      {lista.isPending ? (
-        <Loader m="md" size="sm" />
-      ) : lista.isError ? (
-        <ErroCarregamento erro={lista.error} />
-      ) : lista.data.length === 0 ? (
-        <Text c="dimmed" p="md" size="sm">
-          {situacao === 'ATIVO'
-            ? 'Nenhum contrato ativo. Cadastre os serviços que você cobra todo mês e o ERP passa a gerar as cobranças sozinho.'
-            : 'Nenhum contrato aqui.'}
-        </Text>
-      ) : (
-        <Table.ScrollContainer minWidth={760}>
-          <Table highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th w={60}>Nº</Table.Th>
-                <Table.Th>Contrato</Table.Th>
-                <Table.Th w={130} ta="right">
-                  Valor mensal
-                </Table.Th>
-                <Table.Th w={150}>Fatura · vence</Table.Th>
-                <Table.Th w={170}>Vigência</Table.Th>
-                <Table.Th w={140}>Nota fiscal</Table.Th>
-                <Table.Th w={48} />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {lista.data.map((c) => (
-                <Table.Tr key={c.id}>
-                  <Table.Td fw={600}>{c.numero}</Table.Td>
-                  <Table.Td>
-                    <Text size="sm" fw={500}>
-                      {c.descricao}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {c.cliente.nome}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td ta="right">{moeda(c.valor)}</Table.Td>
-                  <Table.Td>
-                    Dia {c.diaFaturamento} · dia {c.diaVencimento}
-                  </Table.Td>
-                  <Table.Td>
-                    {mesAno(c.inicio)} → {c.fim ? mesAno(c.fim) : 'sem fim'}
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c={c.emitirNfse ? undefined : 'dimmed'}>
-                      {descreverNota(c)}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <MenuAcoes
-                      rotulo={`contrato nº ${c.numero}`}
-                      itens={[
-                        escrever && c.situacao !== 'ENCERRADO' && { texto: 'Editar', aoClicar: () => void editar(c).catch(avisarErro) },
-                        escrever && c.situacao === 'ATIVO' && { texto: 'Pausar', aoClicar: () => acao.mutate({ contrato: c, rota: 'pausa' }) },
-                        escrever && c.situacao === 'PAUSADO' && { texto: 'Reativar', aoClicar: () => acao.mutate({ contrato: c, rota: 'reativacao' }) },
-                        escrever && c.situacao !== 'ENCERRADO' && { texto: 'Encerrar', aoClicar: () => setEncerrando(c), perigosa: true },
-                        pode('administrar') && { texto: 'Excluir', aoClicar: () => setExcluindo(c), perigosa: true },
-                      ]}
-                    />
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
+    <>
+      <TabelaDados<Contrato>
+        linhas={lista.data}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(c) => c.id}
+        contagem={['contrato', 'contratos']}
+        placeholderBusca="Buscar contrato ou cliente"
+        textoBusca={(c) => `${c.numero} ${c.descricao} ${c.cliente.nome}`}
+        ordemInicial={{ coluna: 'numero', direcao: 'asc' }}
+        larguraMinima={820}
+        aoClicarLinha={escrever ? (c) => c.situacao !== 'ENCERRADO' && void editar(c).catch(avisarErro) : undefined}
+        filtros={<SegmentedControl value={situacao} onChange={(v) => setSituacao(v as SituacaoContrato)} data={SITUACOES} aria-label="Situação" />}
+        vazio={
+          <EstadoVazio
+            mensagem={
+              situacao === 'ATIVO'
+                ? 'Nenhum contrato ativo. Cadastre os serviços que você cobra todo mês e o ERP passa a gerar as cobranças sozinho.'
+                : 'Nenhum contrato nesta situação.'
+            }
+          />
+        }
+        colunas={[
+          { id: 'numero', titulo: 'Nº', largura: 70, ordenar: (c) => c.numero, celula: (c) => <Text size="sm" fw={600}>{c.numero}</Text> },
+          {
+            id: 'contrato',
+            titulo: 'Contrato',
+            ordenar: (c) => c.descricao,
+            celula: (c) => (
+              <>
+                <Text size="sm" fw={500} truncate title={c.descricao}>
+                  {c.descricao}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  {c.cliente.nome}
+                </Text>
+              </>
+            ),
+          },
+          { id: 'valor', titulo: 'Valor mensal', alinhar: 'right', largura: 140, ordenar: (c) => c.valor, celula: (c) => <Valor valor={c.valor} /> },
+          {
+            id: 'dias',
+            titulo: 'Fatura e vencimento',
+            largura: 210,
+            ordenar: (c) => c.diaFaturamento,
+            celula: (c) => `Fatura dia ${c.diaFaturamento}, vence dia ${c.diaVencimento}`,
+          },
+          {
+            id: 'vigencia',
+            titulo: 'Vigência',
+            largura: 170,
+            ordenar: (c) => c.inicio,
+            celula: (c) => (c.fim ? `${mesAno(c.inicio)} a ${mesAno(c.fim)}` : `desde ${mesAno(c.inicio)}`),
+          },
+          {
+            id: 'nota',
+            titulo: 'Nota fiscal',
+            largura: 150,
+            celula: (c) => (
+              <Text size="sm" c={c.emitirNfse ? undefined : 'dimmed'} truncate>
+                {descreverNota(c)}
+              </Text>
+            ),
+          },
+        ]}
+        acoes={(c) => (
+          <MenuAcoes
+            rotulo={`contrato nº ${c.numero}`}
+            itens={[
+              escrever && c.situacao !== 'ENCERRADO' && { texto: 'Editar', aoClicar: () => void editar(c).catch(avisarErro) },
+              escrever && c.situacao === 'ATIVO' && { texto: 'Pausar', aoClicar: () => acao.mutate({ contrato: c, rota: 'pausa' }) },
+              escrever && c.situacao === 'PAUSADO' && { texto: 'Reativar', aoClicar: () => acao.mutate({ contrato: c, rota: 'reativacao' }) },
+              escrever && c.situacao !== 'ENCERRADO' && { texto: 'Encerrar', aoClicar: () => setEncerrando(c), perigosa: true },
+              pode('administrar') && { texto: 'Excluir', aoClicar: () => setExcluindo(c), perigosa: true },
+            ]}
+          />
+        )}
+      />
       <Confirmacao
         aberta={encerrando !== null}
         titulo={`Encerrar o contrato nº ${encerrando?.numero ?? ''}`}
@@ -597,7 +598,7 @@ function ListaContratos({ aoEditar }: { aoEditar: (c: Contrato) => void }) {
         aoConfirmar={() => excluindo && acao.mutate({ contrato: excluindo, rota: 'excluir' })}
         aoFechar={() => setExcluindo(null)}
       />
-    </Card>
+    </>
   );
 }
 

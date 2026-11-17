@@ -1,11 +1,12 @@
-import { ActionIcon, Badge, Button, Card, Divider, Grid, Group, Loader, Menu, Modal, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Divider, Grid, Group, Menu, Modal, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconDots, IconPlus, IconSearch } from '@tabler/icons-react';
+import { IconDots, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '../api/cliente';
 import type { DadosCep, DadosCnpj, Pessoa } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, EstadoVazio, SituacaoAtivo } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { CampoCep, enderecoDoCep } from '../componentes/Cep';
 import { BotaoBuscarCnpj, ResumoCnpj, useBuscaCnpj } from '../componentes/Cnpj';
 import { CampoMunicipio } from '../componentes/Fiscal';
@@ -208,7 +209,6 @@ function FormPessoa({ config, pessoa, aoFechar }: { config: ConfigPessoas; pesso
 export function Pessoas({ config }: { config: ConfigPessoas }) {
   const { pode } = useSessao();
   const queryClient = useQueryClient();
-  const [busca, setBusca] = useState('');
   const [editando, setEditando] = useState<Pessoa | 'nova' | null>(null);
   const [removendo, setRemovendo] = useState<Pessoa | null>(null);
   const lista = useQuery({ queryKey: [config.rota], queryFn: () => api.get<Pessoa[]>(config.rota) });
@@ -226,18 +226,6 @@ export function Pessoas({ config }: { config: ConfigPessoas }) {
     },
   });
 
-  const filtradas = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    const termoDigitos = digitos(termo);
-    return (lista.data ?? []).filter(
-      (p) =>
-        !termo ||
-        p.nome.toLowerCase().includes(termo) ||
-        (termoDigitos && p.documento?.includes(termoDigitos)) ||
-        p.email?.toLowerCase().includes(termo),
-    );
-  }, [lista.data, busca]);
-
   const escrever = pode(config.permissaoEscrita);
 
   return (
@@ -252,83 +240,78 @@ export function Pessoas({ config }: { config: ConfigPessoas }) {
           )
         }
       />
-      <Card withBorder padding={0}>
-        <Group p="md">
-          <TextInput
-            placeholder="Buscar por nome, documento ou e-mail"
-            leftSection={<IconSearch size={16} />}
-            value={busca}
-            onChange={(e) => setBusca(e.currentTarget.value)}
-            w={{ base: '100%', sm: 360 }}
+      <TabelaDados<Pessoa>
+        linhas={lista.data}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(p) => p.id}
+        contagem={[config.singular, config.titulo.toLowerCase()]}
+        placeholderBusca="Buscar nome, documento ou e-mail"
+        // O documento entra com e sem pontuação: "12.345" e "12345" encontram o mesmo cadastro.
+        textoBusca={(p) => [p.nome, p.documento, p.documento && documento(p.documento), p.email, p.telefone].filter(Boolean).join(' ')}
+        ordemInicial={{ coluna: 'nome', direcao: 'asc' }}
+        larguraMinima={680}
+        aoClicarLinha={escrever ? setEditando : undefined}
+        vazio={
+          <EstadoVazio
+            mensagem={`Nenhum ${config.singular} cadastrado.`}
+            acao={
+              escrever && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setEditando('nova')}>
+                  Novo {config.singular}
+                </Button>
+              )
+            }
           />
-        </Group>
-        {lista.isPending ? (
-          <Loader m="md" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : filtradas.length === 0 ? (
-          <Text c="dimmed" p="md">
-            {busca ? 'Nada encontrado.' : `Nenhum ${config.singular} cadastrado.`}
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={640}>
-            <Table highlightOnHover verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Nome</Table.Th>
-                  <Table.Th>CPF/CNPJ</Table.Th>
-                  <Table.Th>E-mail</Table.Th>
-                  <Table.Th>Telefone</Table.Th>
-                  <Table.Th>Situação</Table.Th>
-                  {escrever && <Table.Th w={48} />}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filtradas.map((p) => (
-                  <Table.Tr key={p.id}>
-                    <Table.Td fw={500}>{p.nome}</Table.Td>
-                    <Table.Td>
-                      {p.documento ? (
-                        documento(p.documento)
-                      ) : (
-                        <Text size="sm" c="dimmed">
-                          Não informado
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>{p.email}</Table.Td>
-                    <Table.Td>{p.telefone}</Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" color={p.ativo ? 'teal' : 'gray'}>
-                        {p.ativo ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </Table.Td>
-                    {escrever && (
-                      <Table.Td>
-                        <Menu position="bottom-end">
-                          <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${p.nome}`}>
-                              <IconDots size={18} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item onClick={() => setEditando(p)}>Editar</Menu.Item>
-                            {pode('remover') && (
-                              <Menu.Item color="red" onClick={() => setRemovendo(p)}>
-                                Remover
-                              </Menu.Item>
-                            )}
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Table.Td>
+        }
+        colunas={[
+          { id: 'nome', titulo: 'Nome', ordenar: (p) => p.nome, celula: (p) => <Corta>{p.nome}</Corta> },
+          {
+            id: 'documento',
+            titulo: 'CPF/CNPJ',
+            largura: 170,
+            ordenar: (p) => p.documento,
+            celula: (p) =>
+              p.documento ? (
+                documento(p.documento)
+              ) : (
+                <Text size="sm" c="dimmed">
+                  Não informado
+                </Text>
+              ),
+          },
+          { id: 'email', titulo: 'E-mail', ordenar: (p) => p.email, celula: (p) => <Corta>{p.email ?? ''}</Corta> },
+          { id: 'telefone', titulo: 'Telefone', largura: 150, celula: (p) => p.telefone },
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 110,
+            ordenar: (p) => (p.ativo ? 'Ativo' : 'Inativo'),
+            celula: (p) => <SituacaoAtivo ativo={p.ativo} />,
+          },
+        ]}
+        acoes={
+          escrever
+            ? (p) => (
+                <Menu position="bottom-end">
+                  <Menu.Target>
+                    <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${p.nome}`}>
+                      <IconDots size={18} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item onClick={() => setEditando(p)}>Editar</Menu.Item>
+                    {pode('remover') && (
+                      <Menu.Item color="red" onClick={() => setRemovendo(p)}>
+                        Remover
+                      </Menu.Item>
                     )}
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+                  </Menu.Dropdown>
+                </Menu>
+              )
+            : undefined
+        }
+      />
 
       <Modal
         opened={editando !== null}

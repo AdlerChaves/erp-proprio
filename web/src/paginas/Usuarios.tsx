@@ -1,11 +1,12 @@
-import { Badge, Button, Card, Group, Loader, Modal, PasswordInput, Select, Stack, Table, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Group, Modal, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/cliente';
 import type { Perfil, UsuarioDaEmpresa } from '../api/tipos';
-import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, ErroCarregamento, MenuAcoes, SemPermissao, SituacaoAtivo } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, Confirmacao, MenuAcoes, SemPermissao, SituacaoAtivo } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { useSessao } from '../sessao/sessao';
 
 export const PERFIS: { value: Perfil; label: string; descricao: string }[] = [
@@ -130,58 +131,55 @@ export function Usuarios() {
           </Button>
         }
       />
-      <Card withBorder padding={0}>
-        {lista.isPending ? (
-          <Loader m="md" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : (
-          <Table.ScrollContainer minWidth={600}>
-            <Table highlightOnHover verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Nome</Table.Th>
-                  <Table.Th>E-mail</Table.Th>
-                  <Table.Th>Perfil</Table.Th>
-                  <Table.Th w={110}>Situação</Table.Th>
-                  <Table.Th w={48} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {lista.data.map((u) => {
-                  const euMesmo = u.id === me?.usuario.id;
-                  return (
-                    <Table.Tr key={u.id} c={u.ativo ? undefined : 'dimmed'}>
-                      <Table.Td fw={500}>
-                        {u.nome}
-                        {euMesmo && (
-                          <Badge size="xs" variant="outline" ml={6}>
-                            você
-                          </Badge>
-                        )}
-                      </Table.Td>
-                      <Table.Td>{u.email}</Table.Td>
-                      <Table.Td>{rotuloPerfil(u.perfil)}</Table.Td>
-                      <Table.Td>
-                        <SituacaoAtivo ativo={u.ativo} />
-                      </Table.Td>
-                      <Table.Td>
-                        <MenuAcoes
-                          rotulo={u.nome}
-                          itens={[
-                            { texto: 'Alterar perfil', aoClicar: () => setEditando(u) },
-                            !euMesmo && { texto: u.ativo ? 'Suspender acesso' : 'Reativar acesso', aoClicar: () => setAlternando(u), perigosa: u.ativo },
-                          ]}
-                        />
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+      <TabelaDados<UsuarioDaEmpresa>
+        linhas={lista.data}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(u) => u.id}
+        contagem={['usuário', 'usuários']}
+        placeholderBusca="Buscar nome ou e-mail"
+        textoBusca={(u) => `${u.nome} ${u.email} ${rotuloPerfil(u.perfil)}`}
+        ordemInicial={{ coluna: 'nome', direcao: 'asc' }}
+        larguraMinima={620}
+        aoClicarLinha={setEditando}
+        colunas={[
+          {
+            id: 'nome',
+            titulo: 'Nome',
+            ordenar: (u) => u.nome,
+            celula: (u) => (
+              <Group gap={6} wrap="nowrap">
+                <Text size="sm" fw={500} truncate c={u.ativo ? undefined : 'dimmed'}>
+                  {u.nome}
+                </Text>
+                {u.id === me?.usuario.id && (
+                  <Badge size="xs" variant="outline">
+                    você
+                  </Badge>
+                )}
+              </Group>
+            ),
+          },
+          { id: 'email', titulo: 'E-mail', ordenar: (u) => u.email, celula: (u) => <Corta>{u.email}</Corta> },
+          { id: 'perfil', titulo: 'Perfil', largura: 140, ordenar: (u) => rotuloPerfil(u.perfil), celula: (u) => rotuloPerfil(u.perfil) },
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 110,
+            ordenar: (u) => (u.ativo ? 'Ativo' : 'Inativo'),
+            celula: (u) => <SituacaoAtivo ativo={u.ativo} />,
+          },
+        ]}
+        acoes={(u) => (
+          <MenuAcoes
+            rotulo={u.nome}
+            itens={[
+              { texto: 'Alterar perfil', aoClicar: () => setEditando(u) },
+              u.id !== me?.usuario.id && { texto: u.ativo ? 'Suspender acesso' : 'Reativar acesso', aoClicar: () => setAlternando(u), perigosa: u.ativo },
+            ]}
+          />
         )}
-      </Card>
+      />
       <Modal opened={novo} onClose={() => setNovo(false)} title="Conceder acesso" size="lg">
         {novo && <FormNovo aoFechar={() => setNovo(false)} />}
       </Modal>

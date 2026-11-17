@@ -2,11 +2,9 @@ import {
   ActionIcon,
   Badge,
   Button,
-  Card,
   Divider,
   Drawer,
   Group,
-  Loader,
   Menu,
   Modal,
   NumberInput,
@@ -17,7 +15,6 @@ import {
   Text,
   TextInput,
   Tooltip,
-  UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconDots, IconPaperclip, IconPlus } from '@tabler/icons-react';
@@ -27,7 +24,8 @@ import { useSearchParams } from 'react-router-dom';
 import { api, consulta } from '../api/cliente';
 import type { CentroCusto, ContaBancaria, ContaFinanceira, Pessoa, PlanoConta, StatusConta, TipoPlanoConta } from '../api/tipos';
 import { Anexos } from '../componentes/Anexos';
-import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, ErroCarregamento } from '../componentes/comum';
+import { avisarErro, avisarSucesso, Cabecalho, CampoData, CampoMoeda, Confirmacao, EstadoVazio, Valor } from '../componentes/comum';
+import { Corta, TabelaDados } from '../componentes/TabelaDados';
 import { useSessao } from '../sessao/sessao';
 import { data, hoje, moeda, STATUS_CONTA, vencida } from '../util/formato';
 
@@ -60,6 +58,13 @@ export const PAGAR: ConfigContas = {
 };
 
 type FiltroStatus = 'EM_ABERTO' | StatusConta | 'TODAS';
+
+/** Texto da coluna Categoria, também usado na busca e na ordenação. */
+const categoriaDe = (c: ContaFinanceira) => (c.faturaCartaoId ? 'Por compra, no cartão' : (c.planoConta?.nome ?? 'Sem categoria'));
+
+/** Situação mostrada na lista: a vencida aparece como "Vencida" no selo, em vez de pintar também a data. */
+const situacaoDe = (c: ContaFinanceira) =>
+  vencida(c.status, c.dataVencimento) ? { rotulo: 'Vencida', cor: 'red' } : STATUS_CONTA[c.status];
 
 const FILTROS_STATUS: { value: FiltroStatus; label: string }[] = [
   { value: 'EM_ABERTO', label: 'Em aberto (inclui parciais)' },
@@ -429,7 +434,6 @@ export function Contas({ config }: { config: ConfigContas }) {
     () => (lista.data ?? []).filter((c) => status !== 'EM_ABERTO' || c.status === 'ABERTA' || c.status === 'PARCIAL'),
     [lista.data, status],
   );
-  const totais = contas.reduce((t, c) => ({ valor: t.valor + c.valor, saldo: t.saldo + c.saldo }), { valor: 0, saldo: 0 });
 
   const cancelar = useMutation({
     mutationFn: (c: ContaFinanceira) => api.post(`${config.rota}/${c.id}/cancelamento`),
@@ -458,141 +462,191 @@ export function Contas({ config }: { config: ConfigContas }) {
           )
         }
       />
-      <Card withBorder padding={0}>
-        <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} p="md">
-          <Select label="Situação" data={FILTROS_STATUS} value={status} onChange={(v) => setStatus((v as FiltroStatus) ?? 'EM_ABERTO')} allowDeselect={false} />
-          <Select label={config.pessoa.rotulo} data={apoio.pessoas} value={pessoaId} onChange={setPessoaId} searchable clearable placeholder="Todos" />
-          <CampoData label="Vencimento de" value={de} onChange={setDe} clearable />
-          <CampoData label="até" value={ate} onChange={setAte} clearable />
-        </SimpleGrid>
-        {lista.isPending ? (
-          <Loader m="md" />
-        ) : lista.isError ? (
-          <ErroCarregamento erro={lista.error} />
-        ) : contas.length === 0 ? (
-          <Text c="dimmed" p="md">
-            Nenhuma conta encontrada com estes filtros.
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={820}>
-            <Table highlightOnHover verticalSpacing="sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Vencimento</Table.Th>
-                  <Table.Th>Descrição</Table.Th>
-                  <Table.Th>{config.pessoa.rotulo}</Table.Th>
-                  <Table.Th>Categoria</Table.Th>
-                  <Table.Th ta="right">Valor</Table.Th>
-                  <Table.Th ta="right">Saldo</Table.Th>
-                  <Table.Th w={120}>Situação</Table.Th>
-                  <Table.Th w={48} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {contas.map((c) => {
-                  const atrasada = vencida(c.status, c.dataVencimento);
-                  const emAberto = c.status === 'ABERTA' || c.status === 'PARCIAL';
-                  return (
-                    <Table.Tr key={c.id}>
-                      <Table.Td c={atrasada ? 'red.7' : undefined} fw={atrasada ? 600 : undefined}>
-                        {data(c.dataVencimento)}
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap={6} wrap="nowrap">
-                          <Text size="sm" style={{ cursor: 'pointer' }} onClick={() => setDetalhe(c)} td="underline" c="teal.8">
-                            {c.descricao}
-                          </Text>
-                          {!!c.quantidadeAnexos && (
-                            <Tooltip label={c.quantidadeAnexos === 1 ? '1 arquivo anexado' : `${c.quantidadeAnexos} arquivos anexados`}>
-                              <UnstyledButton onClick={() => setDetalhe(c)} aria-label={`Ver ${c.quantidadeAnexos} anexo(s) de ${c.descricao}`}>
-                                <Group gap={2} wrap="nowrap" c="dimmed">
-                                  <IconPaperclip size={14} />
-                                  <Text size="xs">{c.quantidadeAnexos}</Text>
-                                </Group>
-                              </UnstyledButton>
-                            </Tooltip>
-                          )}
-                        </Group>
-                        {c.faturaCartaoId && (
-                          <Badge size="xs" variant="outline" color="grape">
-                            Cartão
-                          </Badge>
-                        )}
-                        {c.despesaRecorrenteId && (
-                          <Text size="xs" c="dimmed">
-                            Despesa recorrente
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>{c[config.pessoa.relacao]?.nome}</Table.Td>
-                      <Table.Td>
-                        {c.faturaCartaoId ? (
-                          <Text size="sm" c="dimmed">
-                            Por compra, no cartão
-                          </Text>
-                        ) : c.planoConta ? (
-                          <Text size="sm" lineClamp={1}>
-                            {c.planoConta.nome}
-                          </Text>
-                        ) : (
-                          <Text size="sm" c="dimmed">
-                            Sem categoria
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        {moeda(c.valor)}
-                        {c.estimada && c.status === 'ABERTA' && (
-                          <Text size="xs" c="orange.8" title="Valor previsto pela média ou pelo faturamento; edite a conta com o valor real quando ela chegar">
-                            estimado
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td ta="right" fw={600}>
-                        {moeda(c.saldo)}
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={atrasada ? 'red' : STATUS_CONTA[c.status].cor} variant="light">
-                          {atrasada ? 'Vencida' : STATUS_CONTA[c.status].rotulo}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Menu position="bottom-end">
-                          <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${c.descricao}`}>
-                              <IconDots size={18} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item onClick={() => setDetalhe(c)}>Detalhes e pagamentos</Menu.Item>
-                            {escrever && emAberto && <Menu.Item onClick={() => setBaixando(c)}>{config.verbo}</Menu.Item>}
-                            {escrever && !c.faturaCartaoId && <Menu.Item onClick={() => setEditando(c)}>Editar</Menu.Item>}
-                            {escrever && c.status === 'ABERTA' && !c.faturaCartaoId && (
-                              <Menu.Item color="red" onClick={() => setCancelando(c)}>
-                                Cancelar conta
-                              </Menu.Item>
-                            )}
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-              <Table.Tfoot>
-                <Table.Tr>
-                  <Table.Th colSpan={4}>
-                    {contas.length} {contas.length === 1 ? 'conta' : 'contas'}
-                  </Table.Th>
-                  <Table.Th ta="right">{moeda(totais.valor)}</Table.Th>
-                  <Table.Th ta="right">{moeda(totais.saldo)}</Table.Th>
-                  <Table.Th colSpan={2} />
-                </Table.Tr>
-              </Table.Tfoot>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+      <TabelaDados<ContaFinanceira>
+        linhas={lista.data ? contas : undefined}
+        erro={lista.error}
+        aoTentarDeNovo={() => lista.refetch()}
+        chave={(c) => c.id}
+        contagem={['conta', 'contas']}
+        placeholderBusca="Buscar descrição, nome ou valor"
+        textoBusca={(c) => [c.descricao, c[config.pessoa.relacao]?.nome, categoriaDe(c), moeda(c.valor), data(c.dataVencimento)].join(' ')}
+        ordemInicial={{ coluna: 'vencimento', direcao: 'asc' }}
+        larguraMinima={900}
+        aoClicarLinha={setDetalhe}
+        filtros={
+          <>
+            <Select
+              aria-label="Situação"
+              data={FILTROS_STATUS}
+              value={status}
+              onChange={(v) => setStatus((v as FiltroStatus) ?? 'EM_ABERTO')}
+              allowDeselect={false}
+              w={232}
+            />
+            <Select
+              aria-label={config.pessoa.rotulo}
+              data={apoio.pessoas}
+              value={pessoaId}
+              onChange={setPessoaId}
+              searchable
+              clearable
+              placeholder={`${config.pessoa.rotulo}: todos`}
+              w={200}
+            />
+            <CampoData aria-label="Vencimento a partir de" placeholder="Vence de" value={de} onChange={setDe} clearable w={130} />
+            <CampoData aria-label="Vencimento até" placeholder="até" value={ate} onChange={setAte} clearable w={130} />
+          </>
+        }
+        vazio={
+          <EstadoVazio
+            mensagem={
+              status === 'EM_ABERTO' && !pessoaId && !de && !ate
+                ? 'Nenhuma conta em aberto. Tudo em dia.'
+                : 'Nenhuma conta com estes filtros. Mude a situação ou o período para ver outras.'
+            }
+            acao={
+              escrever && (
+                <Button variant="default" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setEditando('nova')}>
+                  Nova conta
+                </Button>
+              )
+            }
+          />
+        }
+        colunas={[
+          {
+            id: 'vencimento',
+            titulo: 'Vencimento',
+            largura: 110,
+            ordenar: (c) => c.dataVencimento,
+            celula: (c) => data(c.dataVencimento),
+          },
+          {
+            id: 'descricao',
+            titulo: 'Descrição',
+            ordenar: (c) => c.descricao,
+            celula: (c) => (
+              <>
+                <Group gap={6} wrap="nowrap">
+                  <Text size="sm" fw={500} truncate title={c.descricao}>
+                    {c.descricao}
+                  </Text>
+                  {!!c.quantidadeAnexos && (
+                    <Tooltip label={c.quantidadeAnexos === 1 ? '1 arquivo anexado' : `${c.quantidadeAnexos} arquivos anexados`}>
+                      <Group gap={2} wrap="nowrap" c="dimmed" aria-label={`${c.quantidadeAnexos} anexo(s)`} style={{ flexShrink: 0 }}>
+                        <IconPaperclip size={14} />
+                        <Text size="xs">{c.quantidadeAnexos}</Text>
+                      </Group>
+                    </Tooltip>
+                  )}
+                  {c.faturaCartaoId && (
+                    <Badge size="xs" variant="outline" color="grape" style={{ flexShrink: 0 }}>
+                      Cartão
+                    </Badge>
+                  )}
+                </Group>
+                {c.despesaRecorrenteId && (
+                  <Text size="xs" c="dimmed">
+                    Despesa recorrente
+                  </Text>
+                )}
+              </>
+            ),
+          },
+          {
+            id: 'pessoa',
+            titulo: config.pessoa.rotulo,
+            ordenar: (c) => c[config.pessoa.relacao]?.nome,
+            celula: (c) => <Corta>{c[config.pessoa.relacao]?.nome ?? ''}</Corta>,
+          },
+          {
+            id: 'categoria',
+            titulo: 'Categoria',
+            largura: 200,
+            ordenar: (c) => categoriaDe(c),
+            celula: (c) =>
+              c.planoConta && !c.faturaCartaoId ? (
+                <Corta>{c.planoConta.nome}</Corta>
+              ) : (
+                <Text size="sm" c="dimmed" truncate>
+                  {categoriaDe(c)}
+                </Text>
+              ),
+          },
+          {
+            id: 'valor',
+            titulo: 'Valor',
+            alinhar: 'right',
+            largura: 130,
+            ordenar: (c) => c.valor,
+            celula: (c) => (
+              <>
+                <Valor valor={c.valor} />
+                {c.estimada && c.status === 'ABERTA' && (
+                  <Text size="xs" c="ambar.7" title="Valor previsto pela média ou pelo faturamento; edite a conta com o valor real quando ela chegar">
+                    estimado
+                  </Text>
+                )}
+              </>
+            ),
+          },
+          {
+            id: 'saldo',
+            titulo: 'Saldo',
+            alinhar: 'right',
+            largura: 130,
+            ordenar: (c) => c.saldo,
+            celula: (c) => <Valor valor={c.saldo} forte />,
+          },
+          {
+            id: 'situacao',
+            titulo: 'Situação',
+            largura: 130,
+            ordenar: (c) => situacaoDe(c).rotulo,
+            celula: (c) => {
+              const s = situacaoDe(c);
+              return <Badge color={s.cor}>{s.rotulo}</Badge>;
+            },
+          },
+        ]}
+        acoes={(c) => {
+          const emAberto = c.status === 'ABERTA' || c.status === 'PARCIAL';
+          return (
+            <Menu position="bottom-end">
+              <Menu.Target>
+                <ActionIcon variant="subtle" color="gray" aria-label={`Ações de ${c.descricao}`}>
+                  <IconDots size={18} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item onClick={() => setDetalhe(c)}>Detalhes e pagamentos</Menu.Item>
+                {escrever && emAberto && <Menu.Item onClick={() => setBaixando(c)}>{config.verbo}</Menu.Item>}
+                {escrever && !c.faturaCartaoId && <Menu.Item onClick={() => setEditando(c)}>Editar</Menu.Item>}
+                {escrever && c.status === 'ABERTA' && !c.faturaCartaoId && (
+                  <Menu.Item color="red" onClick={() => setCancelando(c)}>
+                    Cancelar conta
+                  </Menu.Item>
+                )}
+              </Menu.Dropdown>
+            </Menu>
+          );
+        }}
+        rodape={(visiveis) => {
+          const totais = visiveis.reduce((t, c) => ({ valor: t.valor + Math.round(c.valor * 100), saldo: t.saldo + Math.round(c.saldo * 100) }), { valor: 0, saldo: 0 });
+          return (
+            <>
+              <Table.Th colSpan={4}>Total</Table.Th>
+              <Table.Th ta="right">
+                <Valor valor={totais.valor / 100} />
+              </Table.Th>
+              <Table.Th ta="right">
+                <Valor valor={totais.saldo / 100} />
+              </Table.Th>
+              <Table.Th colSpan={2} />
+            </>
+          );
+        }}
+      />
 
       <Modal opened={editando !== null} onClose={() => setEditando(null)} title={editando === 'nova' ? 'Nova conta' : 'Editar conta'} size="lg">
         {editando !== null && <FormConta config={config} conta={editando === 'nova' ? null : editando} aoFechar={() => setEditando(null)} />}

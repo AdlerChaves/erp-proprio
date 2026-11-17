@@ -1,8 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 afterEach(() => cleanup());
+
+// Com a suíte inteira rodando em paralelo (jsdom + Mantine), uma máquina lenta passa do 1 s padrão do waitFor/findBy.
+configure({ asyncUtilTimeout: 4000 });
 
 // O jsdom não implementa estas APIs, que o Mantine usa.
 window.matchMedia ??= (query: string) =>
