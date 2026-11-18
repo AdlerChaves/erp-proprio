@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Ip, Patch, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, Ip, Patch, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
@@ -43,6 +43,10 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // Com o ERP na internet, CADASTRO_ABERTO=false impede que alguém de fora crie uma empresa nova.
+    if (process.env.CADASTRO_ABERTO === 'false') {
+      throw new ForbiddenException('O cadastro de novas empresas está desativado neste servidor. Peça acesso a um administrador.');
+    }
     return entregar(req, res, await this.service.registrar(dto, ip));
   }
 
