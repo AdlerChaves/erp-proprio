@@ -5,8 +5,11 @@ services:
       POSTGRES_USER: ${DB_USER:-erp}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-erp}
       POSTGRES_DB: ${DB_NAME:-erp}
+    # Sem isso, ao reiniciar o Docker/WSL a API volta e o banco não (API cai com ENOTFOUND db).
+    restart: unless-stopped
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Só localhost: o banco não fica exposto na rede (nem na Tailscale).
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -36,6 +39,7 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # Atrás do nginx: necessário para o limite por IP e a auditoria verem o IP real.
       TRUST_PROXY: ${TRUST_PROXY:-1}
+    restart: unless-stopped
     # Sem porta publicada: o acesso passa pelo nginx do serviço web, que repassa /api e /docs.
     depends_on:
       db:
@@ -43,6 +47,7 @@ services:
 
   web:
     build: ./web
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"
     depends_on:
