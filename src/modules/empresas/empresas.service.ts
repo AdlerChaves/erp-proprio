@@ -5,6 +5,7 @@ import { cifraConfigurada, cifrar } from '../../common/cifra';
 import { FUSO } from '../../common/datas';
 import { validarImagem } from '../../common/imagem';
 import { abrirCertificado, CertificadoA1, CertificadoInvalidoError } from '../nfse/certificado';
+import { criarEtapasPadrao } from '../apontamento/etapas-padrao';
 import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
@@ -105,6 +106,7 @@ export class EmpresasService {
       }
       const empresa = await m.save(m.create(Empresa, dto));
       await criarPlanoPadrao(m, empresa.id);
+      await criarEtapasPadrao(m, empresa.id);
       await m.save(m.create(UsuarioEmpresa, { usuarioId, empresaId: empresa.id, perfil: Perfil.ADMIN }));
       return empresa;
     });

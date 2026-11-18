@@ -1,0 +1,10 @@
+/** Situação do andamento de uma obra (Centro de Custo) no painel de apontamento. */
+export enum SituacaoObra {
+  EM_EXECUCAO = 'EM_EXECUCAO',
+  AGUARDANDO_MATERIAL = 'AGUARDANDO_MATERIAL',
+  AGUARDANDO_APROVACAO = 'AGUARDANDO_APROVACAO',
+  AGUARDANDO_CLIENTE = 'AGUARDANDO_CLIENTE',
+  AGUARDANDO_EQUIPE = 'AGUARDANDO_EQUIPE',
+  PAUSADO = 'PAUSADO',
+  CONCLUIDO = 'CONCLUIDO',
+}

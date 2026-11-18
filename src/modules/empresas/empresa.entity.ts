@@ -130,6 +130,10 @@ export class Empresa {
   @Column({ name: 'numero_inicial_vendas', type: 'integer', default: 1 })
   numeroInicialVendas: number;
 
+  /** Painel de apontamento: a etapa fica amarela quando faltam até tantos dias para a data limite. */
+  @Column({ name: 'dias_alerta_etapa', type: 'smallint', default: 3 })
+  diasAlertaEtapa: number;
+
   /** Nulo (empresa que nunca configurou) ou incompleto (campo novo) é completado com o padrão na leitura. */
   @Column({
     type: 'jsonb',

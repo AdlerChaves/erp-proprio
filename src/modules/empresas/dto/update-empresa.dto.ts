@@ -51,6 +51,13 @@ export class UpdateEmpresaDto extends PartialType(OmitType(CreateEmpresaDto, ['c
   @Max(999_999_999)
   numeroInicialVendas?: number;
 
+  /** Painel de apontamento: dias antes da data limite em que a etapa passa a amarela. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  diasAlertaEtapa?: number;
+
   /** Destaques, validade, prazos e parcelamento no cartão dos orçamentos em PDF. */
   @IsOptional()
   @ValidateNested()

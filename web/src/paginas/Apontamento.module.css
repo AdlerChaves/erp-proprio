@@ -1,0 +1,300 @@
+/*
+ * Painel de apontamento (proposta A): grade de até 3×3 cards que ocupa a área útil; com mais de 9 obras,
+ * as colunas rolam continuamente para a esquerda. Os tamanhos de texto acompanham a largura da área (cqw).
+ */
+
+.painel {
+  --gap: 14px;
+  --ok: #2f8a68;
+  --ok-texto: #23704f;
+  --atencao: #d19a1c;
+  --atencao-texto: #8a6110;
+  --atraso: var(--relda-critico);
+  --atraso-texto: #a8352e;
+  --neutro: var(--mantine-color-gray-4);
+  --neutro-texto: var(--mantine-color-gray-6);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Altura útil da tela, descontando o cabeçalho fixo da página e as margens. */
+  /* Cabeçalho da página (~77 px) + 20 px de espaço + 32 px de margem inferior do conteúdo. */
+  height: calc(100dvh - var(--app-shell-header-offset, 0px) - 132px);
+  min-height: 540px;
+}
+.painel[data-tela-cheia] {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  height: 100dvh;
+  min-height: 0;
+  padding: 22px 26px 26px;
+  background: var(--relda-fundo);
+}
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.titulo b {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.titulo span {
+  font-size: 13px;
+  color: var(--mantine-color-gray-6);
+}
+.contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.contador {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--relda-borda);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-white);
+  font-size: 13px;
+  color: var(--mantine-color-gray-6);
+}
+.contador b {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--mantine-color-black);
+  font-variant-numeric: tabular-nums;
+}
+.ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  align-self: center;
+}
+.relogio {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: right;
+}
+.relogio b {
+  display: block;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.relogio span {
+  font-size: 12.5px;
+  color: var(--mantine-color-gray-6);
+}
+
+.janela {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  container-type: inline-size;
+}
+.janela[data-rolagem-manual] {
+  overflow-x: auto;
+}
+.trilho {
+  display: grid;
+  gap: var(--gap);
+  height: 100%;
+}
+.trilho[data-modo='grade'] {
+  grid-template-columns: repeat(var(--colunas), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--linhas), minmax(0, 1fr));
+}
+.trilho[data-modo='rolagem'] {
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-auto-columns: calc((100cqw - 2 * var(--gap)) / 3);
+  will-change: transform;
+}
+
+.card {
+  --cor: var(--neutro);
+  --cor-texto: var(--neutro-texto);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(12px, 1.1cqw, 22px) clamp(14px, 1.3cqw, 26px) clamp(12px, 1.1cqw, 22px) clamp(18px, 1.7cqw, 32px);
+  background: var(--mantine-color-white);
+  border: 1px solid var(--relda-borda);
+  border-radius: var(--mantine-radius-md);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(4px, 0.4cqw, 7px);
+  background: var(--cor);
+}
+.card:hover {
+  border-color: var(--relda-borda-forte);
+}
+.card:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-6);
+  outline-offset: 2px;
+}
+.card[data-cronograma='ok'] {
+  --cor: var(--ok);
+  --cor-texto: var(--ok-texto);
+}
+.card[data-cronograma='atencao'] {
+  --cor: var(--atencao);
+  --cor-texto: var(--atencao-texto);
+}
+.card[data-cronograma='atraso'] {
+  --cor: var(--atraso);
+  --cor-texto: var(--atraso-texto);
+  background: linear-gradient(90deg, var(--relda-critico-fundo) 0, var(--mantine-color-white) 45%);
+}
+
+.linha1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.nome {
+  font-size: clamp(15px, 1.4cqw, 28px);
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.situacao {
+  flex-shrink: 0;
+  font-size: clamp(11.5px, 0.85cqw, 16px);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--mantine-radius-xs);
+  background: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+  white-space: nowrap;
+}
+.situacao[data-aguardando] {
+  background: var(--relda-atencao-fundo);
+  color: var(--atencao-texto);
+}
+
+.etapa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.rotulo {
+  font-size: clamp(11.5px, 0.85cqw, 16px);
+  color: var(--mantine-color-gray-6);
+}
+.etapaNome {
+  font-size: clamp(13.5px, 1.1cqw, 21px);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.segmentos {
+  display: grid;
+  grid-template-columns: repeat(var(--total), minmax(0, 1fr));
+  gap: 3px;
+  height: clamp(4px, 0.3cqw, 6px);
+}
+.segmentos i {
+  border-radius: 1px;
+  background: var(--relda-borda);
+}
+.segmentos i[data-estado='feita'] {
+  background: var(--mantine-color-teal-3);
+}
+.segmentos i[data-estado='atual'] {
+  background: var(--cor);
+}
+
+.observacao {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: clamp(12px, 0.9cqw, 17px);
+  color: var(--mantine-color-gray-7);
+  line-height: 1.35;
+}
+.observacao span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.observacao svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--mantine-color-gray-5);
+}
+
+.prazo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: clamp(12px, 0.9cqw, 17px);
+  color: var(--mantine-color-gray-6);
+  font-variant-numeric: tabular-nums;
+}
+.prazo b {
+  font-size: clamp(12.5px, 1cqw, 19px);
+  font-weight: 600;
+  color: var(--cor-texto);
+  white-space: nowrap;
+}
+
+/* No celular: lista vertical, sem rolagem automática. */
+@media (max-width: 48em) {
+  .painel {
+    height: auto;
+    min-height: 0;
+  }
+  .janela {
+    overflow: visible;
+    container-type: normal;
+  }
+  .trilho[data-modo='grade'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .card {
+    min-height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

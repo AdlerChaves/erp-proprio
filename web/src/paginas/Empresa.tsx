@@ -248,6 +248,50 @@ function FormNumeracao({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEdi
   );
 }
 
+/** Dias de antecedência em que a etapa de uma obra fica amarela no painel de apontamento. */
+function FormAlertaEtapas({ empresa, podeEditar }: { empresa: DadosEmpresa; podeEditar: boolean }) {
+  const queryClient = useQueryClient();
+  const form = useForm({
+    initialValues: { diasAlertaEtapa: empresa.diasAlertaEtapa as number | '' },
+    validate: {
+      diasAlertaEtapa: (v) => (v !== '' && Number.isInteger(v) && v >= 0 && v <= 60 ? null : 'Um número inteiro de 0 a 60'),
+    },
+  });
+  const salvar = useMutation({
+    mutationFn: (v: typeof form.values) => api.patch<DadosEmpresa>('/empresas/atual', { diasAlertaEtapa: Number(v.diasAlertaEtapa) }),
+    onSuccess: (atualizada) => {
+      queryClient.setQueryData(['/empresas/atual'], atualizada);
+      queryClient.invalidateQueries({ queryKey: ['apontamento'] });
+      form.resetDirty({ diasAlertaEtapa: atualizada.diasAlertaEtapa });
+      avisarSucesso('Alerta das etapas salvo');
+    },
+    onError: avisarErro,
+  });
+
+  return (
+    <form onSubmit={form.onSubmit((v) => salvar.mutate(v))}>
+      <Group align="flex-end">
+        <NumberInput
+          label="Dias de alerta antes da data limite"
+          description="Com 3, a etapa fica amarela quando faltam 3 dias ou menos; vencida, fica vermelha"
+          allowDecimal={false}
+          allowNegative={false}
+          min={0}
+          max={60}
+          w={{ base: '100%', sm: 420 }}
+          disabled={!podeEditar}
+          {...form.getInputProps('diasAlertaEtapa')}
+        />
+        {podeEditar && (
+          <Button type="submit" loading={salvar.isPending} disabled={!form.isDirty()}>
+            Salvar
+          </Button>
+        )}
+      </Group>
+    </form>
+  );
+}
+
 const REGIMES: { value: RegimeTributario; label: string }[] = [
   { value: 'SIMPLES_NACIONAL', label: 'Simples Nacional (ME/EPP)' },
   { value: 'MEI', label: 'MEI' },
@@ -602,6 +646,14 @@ export function Empresa() {
             O mesmo número acompanha o orçamento quando ele vira pedido e venda. Números já usados não mudam.
           </Text>
           {empresa.data && <FormNumeracao key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Title order={4}>Painel de apontamento</Title>
+          <Text size="sm" c="dimmed" mb="md">
+            Quando a etapa de uma obra passa de verde para amarelo no painel.
+          </Text>
+          {empresa.data && <FormAlertaEtapas key={empresa.data.id} empresa={empresa.data} podeEditar={pode('administrar')} />}
         </Card>
 
         <Card withBorder padding="lg">

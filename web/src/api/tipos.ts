@@ -192,6 +192,8 @@ export interface Empresa {
   certificadoValidade: string | null;
   /** Orçamentos e vendas são numerados a partir deste número (ou do último usado, se for maior). */
   numeroInicialVendas: number;
+  /** Painel de apontamento: a etapa fica amarela quando faltam até tantos dias para a data limite. */
+  diasAlertaEtapa: number;
   proposta: ConfigProposta;
   telefone: string | null;
   email: string | null;
@@ -650,4 +652,46 @@ export interface DespesaRecorrente {
   centroCustoId: string | null;
   observacoes: string | null;
   proximas: VencimentoPrevisto[];
+}
+
+/** Andamento de uma obra (Centro de Custo) no painel de apontamento. */
+export type SituacaoObra =
+  | 'EM_EXECUCAO'
+  | 'AGUARDANDO_MATERIAL'
+  | 'AGUARDANDO_APROVACAO'
+  | 'AGUARDANDO_CLIENTE'
+  | 'AGUARDANDO_EQUIPE'
+  | 'PAUSADO'
+  | 'CONCLUIDO';
+
+/** Etapa de uma obra; a atual é a primeira, na ordem, ainda não concluída. */
+export interface EtapaObra {
+  id: string;
+  nome: string;
+  ordem: number;
+  dataLimite: string | null;
+  concluidaEm: string | null;
+}
+
+/** Centro de Custo ativo acompanhado no painel de apontamento. */
+export interface Obra {
+  id: string;
+  nome: string;
+  situacao: SituacaoObra | null;
+  observacao: string | null;
+  etapas: EtapaObra[];
+}
+
+export interface PainelApontamento {
+  /** Dias antes da data limite em que a etapa passa a amarela (configuração da empresa). */
+  diasAlerta: number;
+  obras: Obra[];
+}
+
+/** Etapa do modelo da empresa, copiada para as obras em "Aplicar etapas padrão". */
+export interface EtapaPadrao {
+  id: string;
+  nome: string;
+  ordem: number;
+  ativo: boolean;
 }

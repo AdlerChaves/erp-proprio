@@ -19,6 +19,8 @@ import {
   IconHistory,
   IconHome,
   IconKey,
+  IconLayoutGrid,
+  IconListNumbers,
   IconListTree,
   IconLogout,
   IconPackage,
@@ -57,7 +59,12 @@ interface GrupoMenu {
 }
 
 const MENU: GrupoMenu[] = [
-  { itens: [{ rota: '/', rotulo: 'Painel', icone: IconHome }] },
+  {
+    itens: [
+      { rota: '/', rotulo: 'Painel', icone: IconHome },
+      { rota: '/apontamento', rotulo: 'Apontamento', icone: IconLayoutGrid },
+    ],
+  },
   {
     grupo: 'Financeiro',
     itens: [
@@ -90,6 +97,7 @@ const MENU: GrupoMenu[] = [
       { rota: '/produtos', rotulo: 'Produtos e serviços', icone: IconPackage },
       { rota: '/contas-bancarias', rotulo: 'Contas bancárias', icone: IconBuildingBank },
       { rota: '/plano-contas', rotulo: 'Plano de contas', icone: IconListTree },
+      { rota: '/etapas-padrao', rotulo: 'Etapas padrão', icone: IconListNumbers },
       { rota: '/centros-custo', rotulo: 'Centros de custo', icone: IconTargetArrow },
     ],
   },

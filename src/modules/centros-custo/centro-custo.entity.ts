@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { SituacaoObra } from '../apontamento/situacao-obra.enum';
 import { Empresa } from '../empresas/empresa.entity';
 
 /** Departamento, projeto ou unidade para separar receitas e despesas. */
@@ -32,6 +33,14 @@ export class CentroCusto {
 
   @Column({ default: true })
   ativo: boolean;
+
+  /** Andamento da obra no painel de apontamento; nulo enquanto ninguém informou. */
+  @Column({ type: 'enum', enum: SituacaoObra, enumName: 'situacao_obra', nullable: true })
+  situacao: SituacaoObra | null;
+
+  /** Nota curta mostrada no card do painel de apontamento. */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  observacao: string | null;
 
   @CreateDateColumn({ name: 'criado_em', type: 'timestamptz' })
   criadoEm: Date;

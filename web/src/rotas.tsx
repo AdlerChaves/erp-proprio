@@ -17,6 +17,8 @@ import { Estoque } from './paginas/Estoque';
 import { Cadastro, Login } from './paginas/Entrada';
 import { Extrato } from './paginas/Extrato';
 import { NotasServico } from './paginas/NotasServico';
+import { Apontamento } from './paginas/Apontamento';
+import { EtapasPadrao } from './paginas/EtapasPadrao';
 import { Painel } from './paginas/Painel';
 import { CLIENTES, FORNECEDORES, Pessoas } from './paginas/Pessoas';
 import { PlanoContas } from './paginas/PlanoContas';
@@ -63,6 +65,8 @@ export const rotas = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: '/', element: <Painel /> },
+          { path: '/apontamento', element: <Apontamento /> },
+          { path: '/etapas-padrao', element: <EtapasPadrao /> },
           { path: '/contas-receber', element: <Contas key="receber" config={RECEBER} /> },
           { path: '/contas-pagar', element: <Contas key="pagar" config={PAGAR} /> },
           { path: '/clientes', element: <Pessoas key="clientes" config={CLIENTES} /> },

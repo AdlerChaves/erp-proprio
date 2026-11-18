@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { Empresa } from '../empresas/empresa.entity';
+import { criarEtapasPadrao } from '../apontamento/etapas-padrao';
 import { criarPlanoPadrao } from '../plano-contas/plano-padrao';
 import { Perfil } from '../usuarios/perfil.enum';
 import { UsuarioEmpresa } from '../usuarios/usuario-empresa.entity';
@@ -50,6 +51,7 @@ export class AuthService {
       }
       const empresa = await m.save(m.create(Empresa, dto.empresa));
       await criarPlanoPadrao(m, empresa.id);
+      await criarEtapasPadrao(m, empresa.id);
       const usuario = await m.save(
         m.create(Usuario, {
           nome: dto.usuario.nome,
